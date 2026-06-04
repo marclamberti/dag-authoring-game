@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DAG Builder — Stage</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+</head>
+<body>
+  <div class="stage">
+    <!-- Editor -->
+    <section class="editor-pane">
+      <div class="editor-head">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="editor-file mono">dags/sales_pipeline.py</span>
+      </div>
+      <pre class="editor-body"><code id="editor" class="language-python"></code><span id="caret" class="caret">&nbsp;</span></pre>
+    </section>
+
+    <!-- Side panel -->
+    <aside class="side">
+      <div class="card" id="question-card">
+        <div class="q-progress" id="progress">Lobby</div>
+        <div class="q-title" id="q-title">Build a DAG, together.</div>
+        <div class="q-prompt" id="q-prompt">
+          Scan to join. The whole room votes on every line of best-practice Airflow 3.
+        </div>
+        <div class="options" id="options"></div>
+        <div class="teach hidden" id="teach"></div>
+      </div>
+
+      <div class="controls">
+        <button class="btn primary" id="btn-main">Start</button>
+        <button class="btn" id="btn-reset">Reset</button>
+      </div>
+
+      <div class="foot">
+        <div class="card join">
+          <div id="qrcode"></div>
+          <div class="join-text">
+            <div class="lead">Join at</div>
+            <div class="url mono" id="join-url">…</div>
+            <div class="count" id="player-count">0 players</div>
+          </div>
+        </div>
+        <div class="card lead-board">
+          <h3>🏆 Leaderboard</h3>
+          <div id="leaderboard"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/stage.js"></script>
+</body>
+</html>
