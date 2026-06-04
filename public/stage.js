@@ -1,4 +1,4 @@
-/* Stage (presenter) view — drives the session and renders the live editor. */
+/* Stage (presenter) view, drives the session and renders the live editor. */
 const socket = io();
 
 const el = (id) => document.getElementById(id);
@@ -105,10 +105,40 @@ function renderControls() {
   const phase = cur ? cur.phase : "lobby";
   if (phase === "lobby") btn.textContent = "Start";
   else if (phase === "voting") btn.textContent = "Reveal results";
-  else if (phase === "revealed")
+  else if (phase === "revealed") btn.textContent = "Show explanation";
+  else if (phase === "explaining")
     btn.textContent =
       cur.step.index + 1 < cur.step.total ? "Commit & Next" : "Commit & Finish";
   else btn.textContent = "Restart";
+}
+
+function correctCode() {
+  if (!cur || !cur.step || !cur.correctId) return "";
+  const o = cur.step.options.find((x) => x.id === cur.correctId);
+  return o ? o.code : "";
+}
+
+function renderExplain() {
+  if (!cur || !cur.step) return;
+  el("explain-progress").textContent = `Step ${cur.step.index + 1} of ${cur.step.total} · Why it matters`;
+  el("explain-title").textContent = cur.step.title;
+  el("explain-why").textContent = cur.teach || "";
+  el("explain-points").innerHTML = (cur.points || [])
+    .map((p) => `<li>${escapeHtml(p)}</li>`)
+    .join("");
+
+  const snippet = el("explain-snippet");
+  const code = correctCode();
+  if (code) {
+    const codeEl = el("explain-code");
+    codeEl.textContent = code;
+    codeEl.removeAttribute("data-highlighted");
+    delete codeEl.dataset.highlighted;
+    if (window.hljs) hljs.highlightElement(codeEl);
+    snippet.classList.remove("hidden");
+  } else {
+    snippet.classList.add("hidden");
+  }
 }
 
 function render() {
@@ -130,13 +160,13 @@ function render() {
       "Scan to join. The whole room votes on every line of best-practice Airflow 3.";
   }
 
-  const teachEl = el("teach");
-  if (cur.phase === "revealed" && cur.teach) {
-    teachEl.textContent = cur.teach;
-    teachEl.classList.remove("hidden");
-  } else {
-    teachEl.classList.add("hidden");
-  }
+  // Explanation phase swaps the right panel into a focused "slide":
+  // hide the question + join/leaderboard, show the explanation; editor stays.
+  const explaining = cur.phase === "explaining";
+  el("question-card").classList.toggle("hidden", explaining);
+  el("foot").classList.toggle("hidden", explaining);
+  el("explain-card").classList.toggle("hidden", !explaining);
+  if (explaining) renderExplain();
 
   renderOptions();
   renderLeaderboard();
@@ -165,7 +195,8 @@ el("btn-main").addEventListener("click", () => {
   const phase = cur ? cur.phase : "lobby";
   if (phase === "lobby" || phase === "finished") socket.emit("start");
   else if (phase === "voting") socket.emit("reveal");
-  else if (phase === "revealed") socket.emit("next");
+  else if (phase === "revealed") socket.emit("explain");
+  else if (phase === "explaining") socket.emit("next");
 });
 el("btn-reset").addEventListener("click", () => {
   if (confirm("Reset the whole session (editor + scores)?")) socket.emit("reset");

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DAG Builder — Stage</title>
+  <title>DAG Builder: Stage</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet"
@@ -32,7 +32,18 @@
           Scan to join. The whole room votes on every line of best-practice Airflow 3.
         </div>
         <div class="options" id="options"></div>
-        <div class="teach hidden" id="teach"></div>
+      </div>
+
+      <!-- Explanation "slide", shown after Reveal, replaces the panel above -->
+      <div class="card explain-card hidden" id="explain-card">
+        <div class="q-progress" id="explain-progress"></div>
+        <div class="q-title" id="explain-title"></div>
+        <div class="explain-why" id="explain-why"></div>
+        <ul class="explain-points" id="explain-points"></ul>
+        <div class="explain-snippet hidden" id="explain-snippet">
+          <div class="explain-snippet-label">What we're adding</div>
+          <pre><code id="explain-code" class="language-python"></code></pre>
+        </div>
       </div>
 
       <div class="controls">
@@ -40,7 +51,7 @@
         <button class="btn" id="btn-reset">Reset</button>
       </div>
 
-      <div class="foot">
+      <div class="foot" id="foot">
         <div class="card join">
           <div id="qrcode"></div>
           <div class="join-text">

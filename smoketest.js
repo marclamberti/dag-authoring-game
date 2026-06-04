@@ -54,6 +54,15 @@ function assert(cond, msg) {
   assert(br.correct === false && br.score === 0, "Bob scored 0 for wrong vote");
   assert(rev.leaderboard[0].name === "Alice" && rev.leaderboard[0].score === 100,
     "Alice tops the leaderboard");
+  assert(rev.points == null, "explanation points hidden until Show explanation");
+
+  // Show explanation -> phase becomes explaining, slide content exposed
+  const explaining = next(stage, "state");
+  stage.emit("explain");
+  const exp = await explaining;
+  assert(exp.phase === "explaining", "phase is explaining after Show explanation");
+  assert(Array.isArray(exp.points) && exp.points.length > 0, "explanation points exposed");
+  assert(typeof exp.teach === "string" && exp.teach.length > 0, "explanation 'why' exposed");
 
   // Commit & Next -> editor should advance to step 1's snapshot
   const committed = next(stage, "state");

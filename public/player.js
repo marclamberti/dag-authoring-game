@@ -1,4 +1,4 @@
-/* Player (audience) view — join, vote, see your result + score. */
+/* Player (audience) view, join, vote, see your result + score. */
 const socket = io();
 const el = (id) => document.getElementById(id);
 
@@ -95,7 +95,7 @@ function renderVote() {
   el("p-prompt").textContent = cur.step.prompt;
   el("p-score").textContent = myScore > 0 ? `Score: ${myScore}` : "";
 
-  const revealed = cur.phase === "revealed";
+  const revealed = cur.phase === "revealed" || cur.phase === "explaining";
   el("p-options").innerHTML = cur.step.options
     .map((o) => {
       const picked = myVote === o.id;
@@ -121,10 +121,10 @@ function renderVote() {
     status.classList.remove("hidden");
     status.innerHTML = lastResult.correct
       ? '<span class="result-good">Best practice! +100</span>'
-      : '<span class="result-bad">Not the best practice — see the highlighted answer</span>';
+      : '<span class="result-bad">Not the best practice, see the highlighted answer</span>';
   } else if (revealed && !myVote) {
     status.classList.remove("hidden");
-    status.textContent = "Round over — vote next time!";
+    status.textContent = "Round over, vote next time!";
   } else if (myVote) {
     status.classList.remove("hidden");
     status.textContent = "Locked in (tap another to change)";

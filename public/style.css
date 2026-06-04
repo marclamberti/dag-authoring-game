@@ -222,7 +222,7 @@ button { font-family: inherit; cursor: pointer; }
   padding: 2px 8px; border-radius: var(--radius-sm);
 }
 
-/* Teaching note — informational (Twitch info blue) */
+/* Teaching note, informational (Twitch info blue) */
 .teach {
   margin-top: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -232,6 +232,63 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-base);
+}
+
+/* Explanation slide (post-vote) */
+.explain-card { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.explain-why {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text-base);
+  margin: var(--space-1) 0 var(--space-3);
+}
+.explain-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.explain-points li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-base);
+}
+.explain-points li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--purple);
+}
+.explain-snippet { margin-top: var(--space-4); }
+.explain-snippet-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-alt-2);
+  margin-bottom: var(--space-1);
+}
+.explain-snippet pre {
+  margin: 0;
+  background: var(--bg-base);
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow: auto;
+}
+.explain-snippet code {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.5;
+  background: transparent;
 }
 
 .controls { display: flex; gap: var(--space-2); }
@@ -259,7 +316,7 @@ button { font-family: inherit; cursor: pointer; }
 .lead-row .sc { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--warning); }
 
 /* ============================================================================
-   PLAYER  (audience screen — mobile-first)
+   PLAYER  (audience screen, mobile-first)
    ========================================================================== */
 .player {
   max-width: 560px;

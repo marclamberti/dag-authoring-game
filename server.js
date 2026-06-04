@@ -33,7 +33,7 @@ app.get("/stage", (_req, res) =>
 // ── Session state ──────────────────────────────────────────────────────────
 const players = {}; // socketId -> { name, score }
 const state = {
-  phase: "lobby", // lobby | voting | revealed | finished
+  phase: "lobby", // lobby | voting | revealed | explaining | finished
   stepIndex: -1,
   votes: {}, // optionId -> count (current step)
   voters: {}, // socketId -> optionId (current step)
@@ -54,26 +54,32 @@ function leaderboard() {
 function publicStep() {
   const s = currentStep();
   if (!s) return null;
+  // NOTE: explanation content (teach/points) is intentionally NOT included here
+  // so it can't leak to players during voting; it ships only post-vote below.
   return {
     index: state.stepIndex,
     total: steps.length,
     title: s.title,
     prompt: s.prompt,
-    teach: s.teach,
     kind: s.kind || "code",
     options: s.options.map((o) => ({ id: o.id, label: o.label, code: o.code })),
   };
 }
 
 function fullState() {
-  const revealed = state.phase === "revealed";
+  // The correct answer is exposed once revealed (for the result highlight);
+  // the explanation slide content ships only during the explaining phase.
+  const postVote = state.phase === "revealed" || state.phase === "explaining";
+  const explaining = state.phase === "explaining";
+  const s = currentStep();
   return {
     phase: state.phase,
     step: publicStep(),
     votes: state.votes,
     totalVotes: Object.values(state.votes).reduce((a, b) => a + b, 0),
-    correctId: revealed ? correctOption()?.id : null,
-    teach: revealed ? currentStep()?.teach : null,
+    correctId: postVote ? correctOption()?.id : null,
+    teach: explaining ? s?.teach : null,
+    points: explaining ? s?.points || [] : null,
     committedCode: state.committedCode,
     playerCount: playerList().length,
     leaderboard: leaderboard(),
@@ -147,8 +153,15 @@ io.on("connection", (socket) => {
     broadcast();
   });
 
-  socket.on("next", () => {
+  // Reveal -> Show explanation: turn the right panel into the step's slide.
+  socket.on("explain", () => {
     if (state.phase !== "revealed") return;
+    state.phase = "explaining";
+    broadcast();
+  });
+
+  socket.on("next", () => {
+    if (state.phase !== "revealed" && state.phase !== "explaining") return;
     const s = currentStep();
     if (s.snapshot !== undefined) state.committedCode = s.snapshot;
     if (state.stepIndex + 1 < steps.length) {
