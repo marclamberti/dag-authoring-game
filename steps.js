@@ -67,29 +67,44 @@ sales_pipeline()
   {
     id: "schedule",
     kind: "code",
-    title: "Step 2: Schedule it",
-    prompt: "This is a plain daily batch. How do we schedule it?",
+    title: "Step 2: Schedule on multiple crons",
+    prompt: "Run at 9am AND 5pm on weekdays. How do we schedule that?",
     teach:
-      "`schedule=\"@daily\"` is clear and declarative. `schedule_interval` is the old " +
-      "Airflow 2 argument name. Asset-based scheduling is fantastic, we'll use it at " +
-      "the very end for the event-driven finale.",
+      "Airflow 3's MultipleCronTriggerTimetable runs a DAG on several cron expressions " +
+      "at once, here 9am and 5pm on weekdays, each firing its own run with the right " +
+      "data interval. It reads clearly and, unlike a single comma-cron, scales to " +
+      "genuinely different schedules (different days, months, or timezones). Duplicating " +
+      "the DAG per time just invites drift.",
     points: [
-      "`schedule` takes cron, presets like `@daily`, timedeltas, or Assets.",
-      "`@daily` is unambiguous and self-documenting for a daily batch.",
-      "`schedule_interval` is the old Airflow 2 name, use `schedule` now.",
+      "MultipleCronTriggerTimetable triggers on several cron expressions at once.",
+      "Each cron fires its own run with the correct data interval.",
+      "Far cleaner than duplicating the DAG once per schedule.",
+      "Handles schedules a single cron can't express (different days/timezones).",
     ],
     options: [
-      { id: "a", label: 'schedule="@daily"', correct: true,
-        code: '@dag(schedule="@daily")' },
-      { id: "b", label: "schedule_interval=timedelta(days=1)",
-        code: "@dag(schedule_interval=timedelta(days=1))" },
-      { id: "c", label: 'schedule=[Asset("sales_raw")]',
-        code: '@dag(schedule=[Asset("sales_raw")])' },
+      { id: "a", label: "MultipleCronTriggerTimetable(...)", correct: true,
+        code:
+          "schedule=MultipleCronTriggerTimetable(\n" +
+          '    "0 9 * * 1-5",\n' +
+          '    "0 17 * * 1-5",\n' +
+          '    timezone="UTC",\n' +
+          ")" },
+      { id: "b", label: "two DAGs, one per time",
+        code: "# sales_9am.py + sales_5pm.py (duplicated DAG)" },
+      { id: "c", label: "run hourly, skip off-hours",
+        code: 'schedule="0 * * * 1-5"  # then skip unless 9 or 17' },
     ],
     snapshot: `from airflow.sdk import dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily")
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    )
+)
 def sales_pipeline():
     pass
 
@@ -124,9 +139,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime
 
 from airflow.sdk import dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
     pass
 
@@ -159,9 +182,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime
 
 from airflow.sdk import dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -203,9 +234,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime
 
 from airflow.sdk import dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -248,9 +287,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime
 
 from airflow.sdk import Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -298,9 +345,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime
 
 from airflow.sdk import Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -359,9 +414,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -421,9 +484,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -484,9 +555,17 @@ sales_pipeline()
     snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+)
 def sales_pipeline():
 
     @task
@@ -568,13 +647,18 @@ sales_report()
     snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Asset, Variable, dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
 
 
 @dag(
-    schedule="@daily",
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
     start_date=datetime(2026, 1, 1),
     tags=["best-practices", "webinar"],
-    doc_md="### Daily sales pipeline\\nBuilt live by the audience",
+    doc_md="### Sales pipeline\\nBuilt live by the audience",
 )
 def sales_pipeline():
 

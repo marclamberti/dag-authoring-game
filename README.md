@@ -61,7 +61,7 @@ else needs to change. Two files get built (one editor tab each). The arc:
 **`dags/sales_pipeline.py`**
 
 1. Instantiate the DAG (`@dag` decorator)
-2. Schedule (`@daily`), teases Asset scheduling
+2. Schedule on multiple crons (`MultipleCronTriggerTimetable`, e.g. 9am & 5pm weekdays)
 3. `start_date` (static datetime, not `datetime.now()`; Airflow 3 defaults `catchup=False`)
 4. Define the first task (`@task` vs `PythonOperator`)
 5. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
