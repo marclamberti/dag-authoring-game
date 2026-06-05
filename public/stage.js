@@ -108,7 +108,7 @@ function renderControls() {
   else if (phase === "revealed") btn.textContent = "Show explanation";
   else if (phase === "explaining")
     btn.textContent =
-      cur.step.index + 1 < cur.step.total ? "Commit & Next" : "Commit & Finish";
+      cur.step.index + 1 < cur.step.total ? "Next step" : "Finish";
   else btn.textContent = "Restart";
 }
 

@@ -18,6 +18,8 @@
  *   `points`  -> the bullet takeaways (the slide content that replaces slides)
  * plus the best-practice snippet (the `correct` option's `code`).
  *
+ * Pipeline being built: get_date -> extract -> transform -> load.
+ *
  * To extend the webinar: add/reorder objects here. Nothing else needs to change.
  */
 
@@ -95,20 +97,20 @@ sales_pipeline()
   {
     id: "start_date",
     kind: "code",
-    title: "Step 3: start_date & catchup",
-    prompt: "What do we pass for start_date and catchup?",
+    title: "Step 3: Set a start_date",
+    prompt: "What do we pass for start_date?",
     teach:
       "A STATIC start_date makes runs deterministic and reproducible. `datetime.now()` " +
       "is the classic footgun, it moves every parse, so Airflow can never decide what to " +
-      "run. `catchup=False` stops a backfill stampede on first deploy.",
+      "run. In Airflow 3 `catchup` defaults to False, so you no longer need to set it.",
     points: [
       "A static `start_date` makes runs deterministic and reproducible.",
       "`datetime.now()` shifts on every parse, Airflow can never settle.",
-      "`catchup=False` prevents a backfill stampede on first deploy.",
+      "Airflow 3 defaults `catchup=False`, so you don't set catchup anymore.",
     ],
     options: [
-      { id: "a", label: "static datetime + catchup=False", correct: true,
-        code: "start_date=datetime(2025, 1, 1), catchup=False" },
+      { id: "a", label: "static datetime", correct: true,
+        code: "start_date=datetime(2026, 1, 1)" },
       { id: "b", label: "datetime.now()",
         code: "start_date=datetime.now()" },
       { id: "c", label: "days_ago(1)",
@@ -119,7 +121,7 @@ sales_pipeline()
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
     pass
 
@@ -133,7 +135,7 @@ sales_pipeline()
     id: "first_task",
     kind: "code",
     title: "Step 4: Define the first task",
-    prompt: "How do we define the extract task?",
+    prompt: "How do we define our first task, get_date?",
     teach:
       "The @task decorator keeps tasks as ordinary Python functions and lets data flow " +
       "through return values. PythonOperator + python_callable still works, but it's more " +
@@ -144,24 +146,24 @@ sales_pipeline()
       "Tasks stay plain, importable, unit-testable Python.",
     ],
     options: [
-      { id: "a", label: "@task def extract(): ...", correct: true,
-        code: "@task\ndef extract():\n    ..." },
+      { id: "a", label: "@task def get_date(): ...", correct: true,
+        code: "@task\ndef get_date():\n    ..." },
       { id: "b", label: "PythonOperator(python_callable=...)",
-        code: 'extract = PythonOperator(task_id="extract", python_callable=_extract)' },
+        code: 'get_date = PythonOperator(task_id="get_date", python_callable=_get_date)' },
     ],
     snapshot: `from datetime import datetime
 
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date():
         ...
 
-    extract()
+    get_date()
 
 
 sales_pipeline()
@@ -170,10 +172,54 @@ sales_pipeline()
 
   // 5 ────────────────────────────────────────────────────────────────────────
   {
+    id: "idempotency",
+    kind: "code",
+    title: "Step 5: Make the first task idempotent",
+    prompt: "get_date returns the run's date. What should it return?",
+    teach:
+      "Return Airflow's `ds` (the run's logical date / data interval), not the wall " +
+      "clock. Declare `ds` as a parameter and Airflow injects it. With `datetime.now()`, " +
+      "re-running a past date fetches TODAY's data; with `ds`, a rerun recomputes for the " +
+      "exact date the run is for. That is idempotency: same run, same result, every time.",
+    points: [
+      "`ds` is the run's logical date, the data interval Airflow gives you.",
+      "Declare `ds` as a task parameter and Airflow passes it in automatically.",
+      "`datetime.now()` is wall-clock, so a rerun of a past date grabs today's data.",
+      "Returning `ds` keeps the task idempotent: reruns and backfills are reproducible.",
+    ],
+    options: [
+      { id: "a", label: "ds parameter", correct: true,
+        code: "@task\ndef get_date(ds=None):\n    return ds" },
+      { id: "b", label: "datetime.now().date()",
+        code: "@task\ndef get_date():\n    return datetime.now().date()" },
+      { id: "c", label: "date.today()",
+        code: "@task\ndef get_date():\n    return date.today()" },
+    ],
+    snapshot: `from datetime import datetime
+
+from airflow.sdk import dag, task
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def sales_pipeline():
+
+    @task
+    def get_date(ds=None):
+        return ds
+
+    get_date()
+
+
+sales_pipeline()
+`,
+  },
+
+  // 6 ────────────────────────────────────────────────────────────────────────
+  {
     id: "no_top_level",
     kind: "code",
-    title: "Step 5: Where does the API call go?",
-    prompt: "We need to call an API. Where do we put that code?",
+    title: "Step 6: Where does the API call go?",
+    prompt: "extract fetches sales for a date. Where does that API call go?",
     teach:
       "Top-level code runs on EVERY parse of the file, slow scheduler, surprise API " +
       "calls, flaky parsing. Heavy work belongs INSIDE the task, where it runs only at " +
@@ -185,49 +231,54 @@ sales_pipeline()
     ],
     options: [
       { id: "a", label: "inside the task body", correct: true,
-        code: 'def extract():\n    import requests\n    return requests.get(URL).json()' },
+        code: "def extract(date):\n    import requests\n    return requests.get(URL).json()" },
       { id: "b", label: "at the top of the file",
-        code: 'data = requests.get(URL).json()' },
+        code: "data = requests.get(URL).json()" },
     ],
     snapshot: `from datetime import datetime
 
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
         import requests
 
-        return requests.get("https://api.example.com/sales").json()
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
 
-    extract()
+    extract(get_date())
 
 
 sales_pipeline()
 `,
   },
 
-  // 6 ────────────────────────────────────────────────────────────────────────
+  // 7 ────────────────────────────────────────────────────────────────────────
   {
     id: "pass_data",
     kind: "code",
-    title: "Step 6: Pass data downstream",
-    prompt: "transform needs extract's output. How do we hand it over?",
+    title: "Step 7: Pass data downstream",
+    prompt: "Pass each task's output to the next (date → extract → transform). How?",
     teach:
-      "Returning a value pushes it to XCom; passing it as an argument pulls it back, " +
-      "explicit, traceable, and parallel-safe. Global variables and scratch files break " +
-      "the moment tasks run on different workers.",
+      "Returning a value pushes it to XCom; taking it as an argument pulls it back. The " +
+      "date flows from get_date into extract, and extract's rows flow into transform, " +
+      "explicit, traceable, and parallel-safe. Globals and scratch files break the " +
+      "moment tasks run on different workers.",
     points: [
       "Return a value to push it to XCom; take an argument to pull it back.",
-      "Explicit, traceable, and safe across parallel workers.",
-      "Globals and `/tmp` files break when tasks land on different machines.",
+      "The date flows get_date → extract; the rows flow extract → transform.",
+      "Explicit and safe across parallel workers; globals and `/tmp` don't survive.",
     ],
     options: [
       { id: "a", label: "return value → pass as argument (XCom)", correct: true,
-        code: "def transform(raw):\n    return clean(raw)\n\ntransform(extract())" },
+        code: "def transform(raw):\n    return clean(raw)\n\ntransform(extract(get_date()))" },
       { id: "b", label: "store it in a global variable",
         code: "RAW = None" },
       { id: "c", label: "write to /tmp and read it back",
@@ -238,31 +289,35 @@ sales_pipeline()
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
         import requests
 
-        return requests.get("https://api.example.com/sales").json()
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
 
     @task
     def transform(raw: dict):
         return [row for row in raw["rows"] if row["amount"] > 0]
 
-    transform(extract())
+    transform(extract(get_date()))
 
 
 sales_pipeline()
 `,
   },
 
-  // 7 ────────────────────────────────────────────────────────────────────────
+  // 8 ────────────────────────────────────────────────────────────────────────
   {
     id: "retries",
     kind: "code",
-    title: "Step 7: Make load resilient",
+    title: "Step 8: Make load resilient",
     prompt: "The load task hits a flaky warehouse. What do we configure?",
     teach:
       "Network and warehouse calls fail transiently, `retries` (with a delay) absorbs " +
@@ -285,14 +340,18 @@ sales_pipeline()
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
         import requests
 
-        return requests.get("https://api.example.com/sales").json()
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
 
     @task
     def transform(raw: dict):
@@ -302,59 +361,7 @@ def sales_pipeline():
     def load(rows: list):
         print(f"Loading {len(rows)} clean rows")
 
-    transform(extract())
-
-
-sales_pipeline()
-`,
-  },
-
-  // 8 ────────────────────────────────────────────────────────────────────────
-  {
-    id: "dependencies",
-    kind: "code",
-    title: "Step 8: Wire the dependencies",
-    prompt: "How do we connect extract → transform → load?",
-    teach:
-      "With TaskFlow you just CALL the tasks: the return values create the dependencies " +
-      "automatically. Mixing in `>>` on decorated functions, or pulling XComs by hand, is " +
-      "redundant and error-prone.",
-    points: [
-      "Calling tasks wires the dependencies automatically in TaskFlow.",
-      "`load(transform(extract()))` reads like the data flow itself.",
-      "Don't mix `>>` on decorated tasks or pull XComs by hand.",
-    ],
-    options: [
-      { id: "a", label: "load(transform(extract()))", correct: true,
-        code: "load(transform(extract()))" },
-      { id: "b", label: "extract() >> transform() >> load()",
-        code: "extract() >> transform() >> load()" },
-      { id: "c", label: "manual set_downstream + xcom_pull",
-        code: "extract.set_downstream(transform)" },
-    ],
-    snapshot: `from datetime import datetime
-
-from airflow.sdk import dag, task
-
-
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
-def sales_pipeline():
-
-    @task
-    def extract():
-        import requests
-
-        return requests.get("https://api.example.com/sales").json()
-
-    @task
-    def transform(raw: dict):
-        return [row for row in raw["rows"] if row["amount"] > 0]
-
-    @task(retries=3)
-    def load(rows: list):
-        print(f"Loading {len(rows)} clean rows")
-
-    load(transform(extract()))
+    transform(extract(get_date()))
 
 
 sales_pipeline()
@@ -363,9 +370,139 @@ sales_pipeline()
 
   // 9 ────────────────────────────────────────────────────────────────────────
   {
+    id: "resilience",
+    kind: "code",
+    title: "Step 9: Harden the task",
+    prompt: "retries=3 is a good start. What else should a production task set?",
+    teach:
+      "Production tasks need more than a retry count. `retry_delay` waits between " +
+      "attempts; `retry_exponential_backoff` lengthens that wait each time instead of " +
+      "hammering a struggling system; and `execution_timeout` kills a hung task so it " +
+      "can never run forever and block a worker slot.",
+    points: [
+      "retries: how many times Airflow re-runs a failed task.",
+      "retry_delay: how long to wait between attempts (e.g. 5 minutes).",
+      "retry_exponential_backoff: grow the wait each retry instead of hammering.",
+      "execution_timeout: kill a hung task so it can't run forever or block the pool.",
+    ],
+    options: [
+      { id: "a", label: "retries + retry_delay + backoff + execution_timeout", correct: true,
+        code:
+          "@task(\n" +
+          "    retries=3,\n" +
+          "    retry_delay=timedelta(minutes=5),\n" +
+          "    retry_exponential_backoff=True,\n" +
+          "    execution_timeout=timedelta(hours=1),\n" +
+          ")" },
+      { id: "b", label: "just retries=3",
+        code: "@task(retries=3)" },
+      { id: "c", label: "retries=50, no timeout",
+        code: "@task(retries=50)" },
+    ],
+    snapshot: `from datetime import datetime, timedelta
+
+from airflow.sdk import dag, task
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def sales_pipeline():
+
+    @task
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
+        import requests
+
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
+
+    @task
+    def transform(raw: dict):
+        return [row for row in raw["rows"] if row["amount"] > 0]
+
+    @task(
+        retries=3,
+        retry_delay=timedelta(minutes=5),
+        retry_exponential_backoff=True,
+        execution_timeout=timedelta(hours=1),
+    )
+    def load(rows: list):
+        print(f"Loading {len(rows)} clean rows")
+
+    transform(extract(get_date()))
+
+
+sales_pipeline()
+`,
+  },
+
+  // 10 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "dependencies",
+    kind: "code",
+    title: "Step 10: Wire the dependencies",
+    prompt: "How do we connect get_date → extract → transform → load?",
+    teach:
+      "With TaskFlow you just CALL the tasks: the return values create the dependencies " +
+      "automatically. Mixing in `>>` on decorated functions, or pulling XComs by hand, is " +
+      "redundant and error-prone.",
+    points: [
+      "Calling tasks wires the dependencies automatically in TaskFlow.",
+      "`load(transform(extract(get_date())))` reads like the data flow itself.",
+      "Don't mix `>>` on decorated tasks or pull XComs by hand.",
+    ],
+    options: [
+      { id: "a", label: "load(transform(extract(get_date())))", correct: true,
+        code: "load(transform(extract(get_date())))" },
+      { id: "b", label: "extract() >> transform() >> load()",
+        code: "extract() >> transform() >> load()" },
+      { id: "c", label: "manual set_downstream + xcom_pull",
+        code: "extract.set_downstream(transform)" },
+    ],
+    snapshot: `from datetime import datetime, timedelta
+
+from airflow.sdk import dag, task
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def sales_pipeline():
+
+    @task
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
+        import requests
+
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
+
+    @task
+    def transform(raw: dict):
+        return [row for row in raw["rows"] if row["amount"] > 0]
+
+    @task(
+        retries=3,
+        retry_delay=timedelta(minutes=5),
+        retry_exponential_backoff=True,
+        execution_timeout=timedelta(hours=1),
+    )
+    def load(rows: list):
+        print(f"Loading {len(rows)} clean rows")
+
+    load(transform(extract(get_date())))
+
+
+sales_pipeline()
+`,
+  },
+
+  // 11 ───────────────────────────────────────────────────────────────────────
+  {
     id: "versioning",
     kind: "predict",
-    title: "Step 9: DAG Versioning (predict!)",
+    title: "Step 11: DAG Versioning (predict!)",
     prompt:
       "You tweak transform and redeploy WHILE a run is in progress. " +
       "Which code does that in-flight run finish with?",
@@ -385,41 +522,50 @@ sales_pipeline()
     ],
     // The editor gets the v2 edit committed so the audience SEES the change that
     // versioning is tracking.
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import dag, task
 
 
-@dag(schedule="@daily", start_date=datetime(2025, 1, 1), catchup=False)
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
         import requests
 
-        return requests.get("https://api.example.com/sales").json()
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
 
     @task
     def transform(raw: dict):
         # v2: keep only high-value sales
         return [row for row in raw["rows"] if row["amount"] > 100]
 
-    @task(retries=3)
+    @task(
+        retries=3,
+        retry_delay=timedelta(minutes=5),
+        retry_exponential_backoff=True,
+        execution_timeout=timedelta(hours=1),
+    )
     def load(rows: list):
         print(f"Loading {len(rows)} clean rows")
 
-    load(transform(extract()))
+    load(transform(extract(get_date())))
 
 
 sales_pipeline()
 `,
   },
 
-  // 10 ───────────────────────────────────────────────────────────────────────
+  // 12 ───────────────────────────────────────────────────────────────────────
   {
     id: "event_driven",
     kind: "code",
-    title: "Step 10: Event-driven finale",
+    title: "Step 12: Event-driven finale",
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
@@ -434,42 +580,51 @@ sales_pipeline()
     ],
     options: [
       { id: "a", label: 'outlets=[Asset("clean_sales")]', correct: true,
-        code: '@task(outlets=[Asset("clean_sales")])' },
+        code: 'outlets=[Asset("clean_sales")]' },
       { id: "b", label: "downstream uses a poke sensor",
         code: "ExternalTaskSensor(...)" },
       { id: "c", label: "TriggerDagRunOperator at the end",
         code: "TriggerDagRunOperator(trigger_dag_id=...)" },
     ],
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Asset, dag, task
 
 
 @dag(
     schedule="@daily",
-    start_date=datetime(2025, 1, 1),
-    catchup=False,
+    start_date=datetime(2026, 1, 1),
     tags=["best-practices", "webinar"],
     doc_md="### Daily sales pipeline\\nBuilt live by the audience",
 )
 def sales_pipeline():
 
     @task
-    def extract():
+    def get_date(ds=None):
+        return ds
+
+    @task
+    def extract(date: str):
         import requests
 
-        return requests.get("https://api.example.com/sales").json()
+        return requests.get(f"https://api.example.com/sales?date={date}").json()
 
     @task
     def transform(raw: dict):
         # v2: keep only high-value sales
         return [row for row in raw["rows"] if row["amount"] > 100]
 
-    @task(retries=3, outlets=[Asset("clean_sales")])
+    @task(
+        retries=3,
+        retry_delay=timedelta(minutes=5),
+        retry_exponential_backoff=True,
+        execution_timeout=timedelta(hours=1),
+        outlets=[Asset("clean_sales")],
+    )
     def load(rows: list):
         print(f"Loading {len(rows)} clean rows")
 
-    load(transform(extract()))
+    load(transform(extract(get_date())))
 
 
 sales_pipeline()

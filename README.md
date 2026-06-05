@@ -55,19 +55,21 @@ that host. On the same LAN you can instead share `http://<your-LAN-IP>:3000/`.
 
 ## The build-script (what gets voted on)
 
-All 10 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
+All 12 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
 else needs to change. The arc:
 
 1. Instantiate the DAG (`@dag` decorator)
 2. Schedule (`@daily`), teases Asset scheduling
-3. `start_date` + `catchup` (static datetime, not `datetime.now()`)
-4. Define a task (`@task`)
-5. No top-level code (work goes inside the task)
-6. Pass data downstream via return value / XCom
-7. Retries on the flaky `load`
-8. Wire dependencies the TaskFlow way
-9. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
-10. **Event-driven finale**, emit an `Asset` outlet (Airflow 3 spotlight)
+3. `start_date` (static datetime, not `datetime.now()`; Airflow 3 defaults `catchup=False`)
+4. Define the first task (`@task` vs `PythonOperator`)
+5. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
+6. No top-level code (the `extract` API call goes inside the task)
+7. Pass data downstream (date → extract → transform via XCom)
+8. Retries on the flaky `load`
+9. Harden the task (`retry_delay`, exponential backoff, `execution_timeout`)
+10. Wire dependencies the TaskFlow way
+11. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
+12. **Event-driven finale**, emit an `Asset` outlet (Airflow 3 spotlight)
 
 ### Editing a round
 

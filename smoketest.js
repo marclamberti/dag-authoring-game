@@ -55,6 +55,8 @@ function assert(cond, msg) {
   assert(rev.leaderboard[0].name === "Alice" && rev.leaderboard[0].score === 100,
     "Alice tops the leaderboard");
   assert(rev.points == null, "explanation points hidden until Show explanation");
+  assert(rev.committedCode === require("./steps.js")[0].snapshot,
+    "best-practice code committed into the editor at Reveal");
 
   // Show explanation -> phase becomes explaining, slide content exposed
   const explaining = next(stage, "state");
@@ -64,12 +66,12 @@ function assert(cond, msg) {
   assert(Array.isArray(exp.points) && exp.points.length > 0, "explanation points exposed");
   assert(typeof exp.teach === "string" && exp.teach.length > 0, "explanation 'why' exposed");
 
-  // Commit & Next -> editor should advance to step 1's snapshot
+  // Next -> just advances the round; the step-1 code stays in the editor
   const committed = next(stage, "state");
   stage.emit("next");
   const st2 = await committed;
   const expected = require("./steps.js")[0].snapshot;
-  assert(st2.committedCode === expected, "editor advanced to step-1 best-practice snapshot");
+  assert(st2.committedCode === expected, "step-1 code persists in the editor after Next");
   assert(st2.step.index === 1 && st2.phase === "voting", "advanced to step 2, voting");
 
   console.log(`\n${failures === 0 ? "ALL PASS ✅" : failures + " FAILED ❌"}`);

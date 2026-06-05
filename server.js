@@ -150,6 +150,10 @@ io.on("connection", (socket) => {
         score: players[sid] ? players[sid].score : 0,
       });
     }
+    // Commit the best-practice snippet into the editor at reveal time, so the
+    // code appears as the result is shown (not later on Next).
+    const s = currentStep();
+    if (s.snapshot !== undefined) state.committedCode = s.snapshot;
     broadcast();
   });
 
@@ -162,8 +166,7 @@ io.on("connection", (socket) => {
 
   socket.on("next", () => {
     if (state.phase !== "revealed" && state.phase !== "explaining") return;
-    const s = currentStep();
-    if (s.snapshot !== undefined) state.committedCode = s.snapshot;
+    // Code was already committed at reveal; Next just advances the round.
     if (state.stepIndex + 1 < steps.length) {
       goToStep(state.stepIndex + 1);
     } else {
