@@ -80,6 +80,9 @@ function fullState() {
     correctId: postVote ? correctOption()?.id : null,
     teach: explaining ? s?.teach : null,
     points: explaining ? s?.points || [] : null,
+    // The downstream-DAG tab appears once revealed (its schedule would otherwise
+    // hint the answer during voting).
+    downstream: postVote ? s?.downstream || null : null,
     committedCode: state.committedCode,
     playerCount: playerList().length,
     leaderboard: leaderboard(),

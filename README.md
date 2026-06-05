@@ -68,7 +68,7 @@ else needs to change. The arc:
 8. Make `load` resilient (`retries`, `retry_delay`, exponential backoff, `execution_timeout`)
 9. Wire dependencies the TaskFlow way
 10. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
-11. **Event-driven finale**, emit an `Asset` outlet (Airflow 3 spotlight)
+11. **Trigger a downstream DAG**, emit an `Asset` outlet; a second editor tab shows the consumer DAG (Airflow 3 spotlight)
 
 ### Editing a round
 

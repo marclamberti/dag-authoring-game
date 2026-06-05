@@ -520,7 +520,7 @@ sales_pipeline()
   {
     id: "event_driven",
     kind: "code",
-    title: "Step 11: Event-driven finale",
+    title: "Step 11: Trigger a downstream DAG",
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
@@ -533,6 +533,26 @@ sales_pipeline()
       "Downstream DAGs `schedule=[Asset(...)]` and fire the moment it updates.",
       "No sensors burning worker slots, no brittle TriggerDagRunOperator timing.",
     ],
+    // Shown as a second editor tab on the Stage once revealed: the consumer DAG
+    // that is scheduled on the Asset this step emits.
+    downstream: {
+      file: "dags/sales_report.py",
+      code: `from airflow.sdk import Asset, dag, task
+
+
+@dag(schedule=[Asset("clean_sales")])
+def sales_report():
+
+    @task
+    def build_report():
+        print("Building report from fresh clean_sales")
+
+    build_report()
+
+
+sales_report()
+`,
+    },
     options: [
       { id: "a", label: 'outlets=[Asset("clean_sales")]', correct: true,
         code: 'outlets=[Asset("clean_sales")]' },

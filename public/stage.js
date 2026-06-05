@@ -15,6 +15,7 @@ let hlTimer = null;
 let cur = null; // last full state
 let displayed = ""; // text currently in the editor
 let typingTimer = null;
+let activeTab = "main"; // "main" = built DAG, "downstream" = consumer DAG
 
 // ── Join URL + QR ────────────────────────────────────────────
 const joinUrl = location.origin + "/";
@@ -82,6 +83,55 @@ function flashChange(prev, next) {
   editorBody.scrollTop = Math.max(0, top - lh * 2);
   clearTimeout(hlTimer);
   hlTimer = setTimeout(() => hl.classList.remove("show"), 2400);
+}
+
+// Render a read-only file (the downstream DAG tab): no typing, no highlight band.
+function renderStaticEditor(code) {
+  if (typingTimer) {
+    clearInterval(typingTimer);
+    typingTimer = null;
+  }
+  hl.classList.remove("show");
+  editorEl.textContent = code || "";
+  caretEl.style.display = "none";
+  if (window.hljs) {
+    editorEl.removeAttribute("data-highlighted");
+    delete editorEl.dataset.highlighted;
+    hljs.highlightElement(editorEl);
+  }
+  editorBody.scrollTop = 0;
+}
+
+function renderEditorForTab() {
+  if (activeTab === "downstream" && cur && cur.downstream) {
+    renderStaticEditor(cur.downstream.code);
+  } else {
+    setEditor(cur ? cur.committedCode : "");
+  }
+}
+
+// Editor file tabs: always the built DAG, plus the downstream DAG once revealed.
+function renderTabs() {
+  const tabsEl = el("tabs");
+  const hasDownstream = !!(cur && cur.downstream);
+  if (!hasDownstream && activeTab === "downstream") activeTab = "main";
+  const tabs = [{ id: "main", label: "dags/sales_pipeline.py" }];
+  if (hasDownstream) tabs.push({ id: "downstream", label: cur.downstream.file });
+  tabsEl.innerHTML = tabs
+    .map(
+      (t) =>
+        `<button class="tab ${activeTab === t.id ? "active" : ""}" data-tab="${t.id}">${escapeHtml(
+          t.label
+        )}</button>`
+    )
+    .join("");
+  tabsEl.querySelectorAll("button").forEach((b) =>
+    b.addEventListener("click", () => {
+      activeTab = b.dataset.tab;
+      renderTabs();
+      renderEditorForTab();
+    })
+  );
 }
 
 // ── Rendering ────────────────────────────────────────────────
@@ -203,7 +253,8 @@ function render() {
   renderOptions();
   renderLeaderboard();
   renderControls();
-  setEditor(cur.committedCode);
+  renderTabs();
+  renderEditorForTab();
 }
 
 function escapeHtml(s) {
