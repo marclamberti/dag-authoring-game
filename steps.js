@@ -2,7 +2,7 @@
  * The build-script for the live DAG-building game.
  *
  * Each entry is ONE voting round. The audience votes on `options`; the one
- * flagged `correct: true` is the best-practice answer. On "Commit & Next" the
+ * flagged `correct: true` is the best-practice answer. On "Reveal results" the
  * editor on the Stage is replaced with that step's `snapshot` (the full file
  * after this decision) and the new tail is typed in. Players who voted for the
  * correct option score points.
@@ -216,28 +216,33 @@ sales_pipeline()
 
   // 6 ────────────────────────────────────────────────────────────────────────
   {
-    id: "no_top_level",
+    id: "variable",
     kind: "code",
-    title: "Step 6: Where does the API call go?",
-    prompt: "extract fetches sales for a date. Where does that API call go?",
+    title: "Step 6: Read the API URL from a Variable",
+    prompt: "The API URL lives in an Airflow Variable. Where do we fetch it?",
     teach:
-      "Top-level code runs on EVERY parse of the file, slow scheduler, surprise API " +
-      "calls, flaky parsing. Heavy work belongs INSIDE the task, where it runs only at " +
-      "execution time.",
+      "Keep config like the API URL in an Airflow Variable, not hardcoded. But " +
+      "`Variable.get()` at the top of the file runs on EVERY parse, a metadata-DB query " +
+      "each time, which slows the scheduler and hammers the database. Fetch the Variable " +
+      "INSIDE the task, so it's read once at run time.",
     points: [
-      "The scheduler re-parses the DAG file constantly.",
-      "Top-level API calls run on every parse, slow, flaky, surprising.",
-      "Heavy work goes inside the task, run only at execution time.",
+      "Keep config (URLs, paths) in Airflow Variables, not hardcoded.",
+      "Top-level `Variable.get()` hits the metadata DB on every parse.",
+      "That slows the scheduler and hammers the database.",
+      "Fetch the Variable inside the task, read once at run time.",
     ],
     options: [
       { id: "a", label: "inside the task body", correct: true,
-        code: "def extract(date):\n    import requests\n    return requests.get(URL).json()" },
+        code:
+          "def extract(date):\n" +
+          '    api_url = Variable.get("sales_api_url")\n' +
+          "    return requests.get(api_url).json()" },
       { id: "b", label: "at the top of the file",
-        code: "data = requests.get(URL).json()" },
+        code: 'api_url = Variable.get("sales_api_url")' },
     ],
     snapshot: `from datetime import datetime
 
-from airflow.sdk import dag, task
+from airflow.sdk import Variable, dag, task
 
 
 @dag(schedule="@daily", start_date=datetime(2026, 1, 1))
@@ -251,7 +256,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     extract(get_date())
 
@@ -286,7 +292,7 @@ sales_pipeline()
     ],
     snapshot: `from datetime import datetime
 
-from airflow.sdk import dag, task
+from airflow.sdk import Variable, dag, task
 
 
 @dag(schedule="@daily", start_date=datetime(2026, 1, 1))
@@ -300,7 +306,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     @task
     def transform(raw: dict):
@@ -315,70 +322,15 @@ sales_pipeline()
 
   // 8 ────────────────────────────────────────────────────────────────────────
   {
-    id: "retries",
-    kind: "code",
-    title: "Step 8: Make load resilient",
-    prompt: "The load task hits a flaky warehouse. What do we configure?",
-    teach:
-      "Network and warehouse calls fail transiently, `retries` (with a delay) absorbs " +
-      "that for free. Combined with idempotent writes, a retry is safe to run again.",
-    points: [
-      "Transient network/warehouse errors are absorbed by `retries`.",
-      "Pair retries with idempotent writes so a re-run is always safe.",
-      "Beats hand-rolled `while True / except` retry loops.",
-    ],
-    options: [
-      { id: "a", label: "@task(retries=3)", correct: true,
-        code: "@task(retries=3)\ndef load(rows):\n    ..." },
-      { id: "b", label: "no retries, let it fail",
-        code: "@task\ndef load(rows):\n    ..." },
-      { id: "c", label: "wrap it in while True / except",
-        code: "while True:\n    try: ...\n    except: continue" },
-    ],
-    snapshot: `from datetime import datetime
-
-from airflow.sdk import dag, task
-
-
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
-def sales_pipeline():
-
-    @task
-    def get_date(ds=None):
-        return ds
-
-    @task
-    def extract(date: str):
-        import requests
-
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
-
-    @task
-    def transform(raw: dict):
-        return [row for row in raw["rows"] if row["amount"] > 0]
-
-    @task(retries=3)
-    def load(rows: list):
-        print(f"Loading {len(rows)} clean rows")
-
-    transform(extract(get_date()))
-
-
-sales_pipeline()
-`,
-  },
-
-  // 9 ────────────────────────────────────────────────────────────────────────
-  {
     id: "resilience",
     kind: "code",
-    title: "Step 9: Harden the task",
-    prompt: "retries=3 is a good start. What else should a production task set?",
+    title: "Step 8: Make load resilient",
+    prompt: "load hits a flaky warehouse. How do we configure it for production?",
     teach:
-      "Production tasks need more than a retry count. `retry_delay` waits between " +
-      "attempts; `retry_exponential_backoff` lengthens that wait each time instead of " +
-      "hammering a struggling system; and `execution_timeout` kills a hung task so it " +
-      "can never run forever and block a worker slot.",
+      "Flaky network and warehouse calls need real resilience. `retries` re-runs a " +
+      "failed task; `retry_delay` waits between attempts; `retry_exponential_backoff` " +
+      "lengthens that wait each time instead of hammering a struggling system; and " +
+      "`execution_timeout` kills a hung task so it can never run forever and block a slot.",
     points: [
       "retries: how many times Airflow re-runs a failed task.",
       "retry_delay: how long to wait between attempts (e.g. 5 minutes).",
@@ -401,7 +353,7 @@ sales_pipeline()
     ],
     snapshot: `from datetime import datetime, timedelta
 
-from airflow.sdk import dag, task
+from airflow.sdk import Variable, dag, task
 
 
 @dag(schedule="@daily", start_date=datetime(2026, 1, 1))
@@ -415,7 +367,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     @task
     def transform(raw: dict):
@@ -437,11 +390,11 @@ sales_pipeline()
 `,
   },
 
-  // 10 ───────────────────────────────────────────────────────────────────────
+  // 9 ────────────────────────────────────────────────────────────────────────
   {
     id: "dependencies",
     kind: "code",
-    title: "Step 10: Wire the dependencies",
+    title: "Step 9: Wire the dependencies",
     prompt: "How do we connect get_date → extract → transform → load?",
     teach:
       "With TaskFlow you just CALL the tasks: the return values create the dependencies " +
@@ -462,7 +415,7 @@ sales_pipeline()
     ],
     snapshot: `from datetime import datetime, timedelta
 
-from airflow.sdk import dag, task
+from airflow.sdk import Variable, dag, task
 
 
 @dag(schedule="@daily", start_date=datetime(2026, 1, 1))
@@ -476,7 +429,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     @task
     def transform(raw: dict):
@@ -498,11 +452,11 @@ sales_pipeline()
 `,
   },
 
-  // 11 ───────────────────────────────────────────────────────────────────────
+  // 10 ───────────────────────────────────────────────────────────────────────
   {
     id: "versioning",
     kind: "predict",
-    title: "Step 11: DAG Versioning (predict!)",
+    title: "Step 10: DAG Versioning (predict!)",
     prompt:
       "You tweak transform and redeploy WHILE a run is in progress. " +
       "Which code does that in-flight run finish with?",
@@ -524,7 +478,7 @@ sales_pipeline()
     // versioning is tracking.
     snapshot: `from datetime import datetime, timedelta
 
-from airflow.sdk import dag, task
+from airflow.sdk import Variable, dag, task
 
 
 @dag(schedule="@daily", start_date=datetime(2026, 1, 1))
@@ -538,7 +492,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     @task
     def transform(raw: dict):
@@ -561,11 +516,11 @@ sales_pipeline()
 `,
   },
 
-  // 12 ───────────────────────────────────────────────────────────────────────
+  // 11 ───────────────────────────────────────────────────────────────────────
   {
     id: "event_driven",
     kind: "code",
-    title: "Step 12: Event-driven finale",
+    title: "Step 11: Event-driven finale",
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
@@ -588,7 +543,7 @@ sales_pipeline()
     ],
     snapshot: `from datetime import datetime, timedelta
 
-from airflow.sdk import Asset, dag, task
+from airflow.sdk import Asset, Variable, dag, task
 
 
 @dag(
@@ -607,7 +562,8 @@ def sales_pipeline():
     def extract(date: str):
         import requests
 
-        return requests.get(f"https://api.example.com/sales?date={date}").json()
+        api_url = Variable.get("sales_api_url")
+        return requests.get(f"{api_url}?date={date}").json()
 
     @task
     def transform(raw: dict):

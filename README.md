@@ -55,7 +55,7 @@ that host. On the same LAN you can instead share `http://<your-LAN-IP>:3000/`.
 
 ## The build-script (what gets voted on)
 
-All 12 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
+All 11 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
 else needs to change. The arc:
 
 1. Instantiate the DAG (`@dag` decorator)
@@ -65,11 +65,10 @@ else needs to change. The arc:
 5. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
 6. No top-level code (the `extract` API call goes inside the task)
 7. Pass data downstream (date → extract → transform via XCom)
-8. Retries on the flaky `load`
-9. Harden the task (`retry_delay`, exponential backoff, `execution_timeout`)
-10. Wire dependencies the TaskFlow way
-11. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
-12. **Event-driven finale**, emit an `Asset` outlet (Airflow 3 spotlight)
+8. Make `load` resilient (`retries`, `retry_delay`, exponential backoff, `execution_timeout`)
+9. Wire dependencies the TaskFlow way
+10. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
+11. **Event-driven finale**, emit an `Asset` outlet (Airflow 3 spotlight)
 
 ### Editing a round
 
