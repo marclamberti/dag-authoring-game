@@ -862,4 +862,254 @@ def sales_report():
 sales_report()
 `,
   },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LEVEL 2 — Blueprint: compose validated DAGs from YAML
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // L2.1 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_why",
+    kind: "code",
+    level: 2,
+    file: "dags/templates/blueprints.py",
+    title: "Step 1: Why Blueprint?",
+    prompt: "50 analysts need to ship pipelines. How do you keep them standard and safe?",
+    teach:
+      "Blueprint lets engineers publish reusable, validated DAG templates; analysts " +
+      "compose pipelines from simple YAML. One tested implementation, Pydantic-validated " +
+      "config, and no copy-pasted DAGs drifting apart.",
+    points: [
+      "Engineers publish reusable, validated templates once.",
+      "Analysts compose DAGs from simple YAML, no Python required.",
+      "Pydantic validates every config, so typos fail fast.",
+      "No more copy-pasted DAGs drifting out of sync.",
+    ],
+    options: [
+      { id: "a", label: "Reusable Blueprint templates + YAML", correct: true,
+        code: "from blueprint import BaseModel, Blueprint, Field" },
+      { id: "b", label: "Copy-paste a template DAG each time",
+        code: "# cp sales_dag.py new_dag.py  (drift)" },
+      { id: "c", label: "A wiki of conventions and hope",
+        code: "# docs/dag-guidelines.md" },
+    ],
+    snapshot: `from airflow.sdk import TaskGroup, task
+from blueprint import BaseModel, Blueprint, Field
+`,
+  },
+
+  // L2.2 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_define",
+    kind: "code",
+    level: 2,
+    file: "dags/templates/blueprints.py",
+    title: "Step 2: Define a Blueprint",
+    prompt: "How do we make a reusable, parameterized task group?",
+    teach:
+      "Subclass `Blueprint[Config]` and implement `render(config)`, returning a TaskGroup " +
+      "keyed by `self.step_id`. The config type makes the template's inputs explicit, and " +
+      "any pipeline can reuse it by name with its own config.",
+    points: [
+      "A Blueprint is a class: `Blueprint[Config]` plus a `render()` method.",
+      "`render()` returns a TaskGroup (or operator) keyed by `self.step_id`.",
+      "The config type makes the template's inputs explicit.",
+      "Reuse it across DAGs by name, no copy-paste.",
+    ],
+    options: [
+      { id: "a", label: "Blueprint[Config] subclass + render()", correct: true,
+        code: "class Extract(Blueprint[ExtractConfig]):\n    def render(self, config) -> TaskGroup:\n        ..." },
+      { id: "b", label: "a plain function you import everywhere",
+        code: "def extract_group(source_table): ..." },
+      { id: "c", label: "copy the tasks into each DAG",
+        code: "# paste the same tasks again" },
+    ],
+    snapshot: `from airflow.sdk import TaskGroup, task
+from blueprint import BaseModel, Blueprint, Field
+
+
+class ExtractConfig(BaseModel):
+    source_table: str
+
+
+class Extract(Blueprint[ExtractConfig]):
+    """Extract a source table into the warehouse."""
+
+    def render(self, config: ExtractConfig) -> TaskGroup:
+        with TaskGroup(group_id=self.step_id) as group:
+
+            @task
+            def run():
+                print(f"Extracting {config.source_table}")
+
+            run()
+        return group
+`,
+  },
+
+  // L2.3 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_validate",
+    kind: "code",
+    level: 2,
+    file: "dags/templates/blueprints.py",
+    title: "Step 3: Validate the config",
+    prompt: "How do we catch bad or misspelled config?",
+    teach:
+      "Type the config with Pydantic `Field` (descriptions and constraints like `ge=1`) " +
+      "and set `model_config = ConfigDict(extra=\"forbid\")`, so an unknown or misspelled " +
+      "key fails immediately as a clear Airflow import error instead of silently doing " +
+      "nothing.",
+    points: [
+      "`Field(description=..., ge=1)` documents and constrains each input.",
+      "`ConfigDict(extra=\"forbid\")` rejects unknown or misspelled keys.",
+      "Bad config fails fast with a clear error, not silently.",
+      "The schema also powers `blueprint describe` and the Astro IDE form.",
+    ],
+    options: [
+      { id: "a", label: 'Pydantic Field + extra="forbid"', correct: true,
+        code:
+          'model_config = ConfigDict(extra="forbid")\n' +
+          'source_table: str = Field(description="...")' },
+      { id: "b", label: "no validation, trust the YAML",
+        code: "source_table: str" },
+      { id: "c", label: "assert inside render()",
+        code: "assert config.source_table  # too late" },
+    ],
+    snapshot: `from airflow.sdk import TaskGroup, task
+from blueprint import BaseModel, Blueprint, Field
+from pydantic import ConfigDict
+
+
+class ExtractConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_table: str = Field(description="Source table to extract")
+    batch_size: int = Field(default=1000, ge=1)
+
+
+class Extract(Blueprint[ExtractConfig]):
+    """Extract a source table into the warehouse."""
+
+    def render(self, config: ExtractConfig) -> TaskGroup:
+        with TaskGroup(group_id=self.step_id) as group:
+
+            @task
+            def run():
+                print(f"Extracting {config.source_table}")
+
+            run()
+        return group
+`,
+  },
+
+  // L2.4 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_compose",
+    kind: "code",
+    level: 2,
+    file: "dags/sales.dag.yaml",
+    title: "Step 4: Compose a DAG in YAML",
+    prompt: "How does an analyst build a pipeline from your Blueprints?",
+    teach:
+      "Write a `*.dag.yaml`: set `dag_id` and `schedule`, then list `steps`, each naming " +
+      "a `blueprint` and its config. No Python, just declarative config that Blueprint " +
+      "validates and turns into a real DAG.",
+    points: [
+      "A `*.dag.yaml` declares `dag_id`, `schedule`, and `steps`.",
+      "Each step names a `blueprint` and passes its config.",
+      "Analysts compose pipelines without touching Python.",
+      "Every value is validated against the Blueprint's config.",
+    ],
+    options: [
+      { id: "a", label: "a *.dag.yaml with steps", correct: true,
+        code: "steps:\n  extract_customers:\n    blueprint: extract\n    source_table: raw.customers" },
+      { id: "b", label: "write the DAG in Python anyway",
+        code: "@dag\ndef sales(): ..." },
+      { id: "c", label: "one giant YAML for every DAG",
+        code: "# all pipelines in one file" },
+    ],
+    snapshot: `dag_id: sales
+schedule: "@daily"
+description: "Composed from Blueprints"
+
+steps:
+  extract_customers:
+    blueprint: extract
+    source_table: raw.customers
+`,
+  },
+
+  // L2.5 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_depends",
+    kind: "code",
+    level: 2,
+    file: "dags/sales.dag.yaml",
+    title: "Step 5: Wire the steps",
+    prompt: "extract_orders must run after extract_customers. How?",
+    teach:
+      "Add `depends_on: [extract_customers]` to a step. Blueprint wires the task groups " +
+      "in that order, validates there are no cycles, and you never touch `>>`.",
+    points: [
+      "`depends_on: [step]` sets order between steps in YAML.",
+      "Blueprint wires the task groups for you, no `>>`.",
+      "It validates the graph and rejects cycles.",
+      "Dependencies stay declarative and reviewable.",
+    ],
+    options: [
+      { id: "a", label: "depends_on: [extract_customers]", correct: true,
+        code: "depends_on: [extract_customers]" },
+      { id: "b", label: "use >> in the YAML",
+        code: "extract_customers >> extract_orders" },
+      { id: "c", label: "rely on key order",
+        code: "# hope the file order wins" },
+    ],
+    snapshot: `dag_id: sales
+schedule: "@daily"
+description: "Composed from Blueprints"
+
+steps:
+  extract_customers:
+    blueprint: extract
+    source_table: raw.customers
+
+  extract_orders:
+    blueprint: extract
+    source_table: raw.orders
+    depends_on: [extract_customers]
+`,
+  },
+
+  // L2.6 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_loader",
+    kind: "code",
+    level: 2,
+    file: "dags/loader.py",
+    title: "Step 6: Load the YAML DAGs",
+    prompt: "How does Airflow turn every *.dag.yaml into a DAG?",
+    teach:
+      "Add one `dags/loader.py` that calls `build_all()`. It discovers every `*.dag.yaml`, " +
+      "validates it, and registers the DAGs, one loader for the whole project. New pipeline? " +
+      "Drop in a YAML file, no new Python.",
+    points: [
+      "`dags/loader.py` calls `build_all()` once for the project.",
+      "It finds and validates every `*.dag.yaml` and builds the DAGs.",
+      "Add a pipeline by dropping in a YAML file, no new Python.",
+      "Validation errors surface as clear Airflow import errors.",
+    ],
+    options: [
+      { id: "a", label: "loader.py with build_all()", correct: true,
+        code: "from blueprint import build_all\n\nbuild_all()" },
+      { id: "b", label: "import each DAG by hand",
+        code: "from my_dags import sales" },
+      { id: "c", label: "a loop that exec()s the YAML",
+        code: "for f in glob(...): exec(...)" },
+    ],
+    snapshot: `from blueprint import build_all
+
+build_all()
+`,
+  },
 ];

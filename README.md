@@ -55,8 +55,12 @@ that host. On the same LAN you can instead share `http://<your-LAN-IP>:3000/`.
 
 ## The build-script (what gets voted on)
 
-All 14 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
-else needs to change. Two files get built (one editor tab each). The arc:
+All rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing else
+needs to change. Each step targets a `file` (one editor tab each) and a `level`;
+crossing into a new level plays a full-screen door transition and starts the
+editor on a fresh slate (scores carry over). The arc:
+
+## Level 1, Author DAGs in Python
 
 **`dags/sales_pipeline.py`**
 
@@ -77,6 +81,17 @@ else needs to change. Two files get built (one editor tab each). The arc:
 12. **Dynamic task mapping** (`.expand()`), one report per region instead of a loop
 13. **Task groups** (`@task_group`), readable, modular, reusable, mappable
 14. **Deferrable mode** (`deferrable=True`), wait via the triggerer without holding a slot
+
+## Level 2, Blueprint (compose validated DAGs from YAML)
+
+Builds `dags/templates/blueprints.py`, `dags/sales.dag.yaml`, and `dags/loader.py`.
+
+1. **Why Blueprint** — reusable validated templates vs copy-pasted DAGs
+2. **Define a Blueprint** — `Blueprint[Config]` + `render()` returning a `TaskGroup`
+3. **Validate the config** — Pydantic `Field` + `ConfigDict(extra="forbid")`
+4. **Compose a DAG in YAML** — a `*.dag.yaml` with `steps` naming blueprints
+5. **Wire the steps** — `depends_on: [...]` in YAML
+6. **Load the YAML DAGs** — `dags/loader.py` calling `build_all()`
 
 ### Editing a round
 

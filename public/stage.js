@@ -18,7 +18,31 @@ let displayedFile = null; // which file `displayed` belongs to
 let typingTimer = null;
 let activeTab = null; // filename currently viewed
 let lastBuildFile = null; // last step's build file (to auto-switch tabs)
-const FILE_ORDER = ["dags/sales_pipeline.py", "dags/sales_report.py"];
+let lastLevel = null; // last step's level (to play the door transition)
+const FILE_ORDER = [
+  "dags/sales_pipeline.py",
+  "dags/sales_report.py",
+  "dags/templates/blueprints.py",
+  "dags/sales.dag.yaml",
+  "dags/loader.py",
+];
+const LEVEL_NAMES = { 1: "Author DAGs in Python", 2: "Blueprint" };
+
+const langFor = (name) =>
+  name && name.endsWith(".yaml") ? "language-yaml" : "language-python";
+
+// Full-screen door transition shown when crossing into a new level.
+function playLevelTransition(level) {
+  const doors = el("level-doors");
+  el("level-label").innerHTML =
+    `<div class="level-num">LEVEL ${level}</div>` +
+    `<div class="level-name">${escapeHtml(LEVEL_NAMES[level] || "")}</div>`;
+  doors.classList.add("active");
+  void doors.offsetWidth; // reflow so the closing transition runs
+  doors.classList.add("closed");
+  setTimeout(() => doors.classList.remove("closed"), 1700); // hold, then open
+  setTimeout(() => doors.classList.remove("active"), 2400); // hide once open
+}
 
 // ── Join URL + QR ────────────────────────────────────────────
 const joinUrl = location.origin + "/";
@@ -32,6 +56,7 @@ function renderEditor(text, typing) {
   editorEl.textContent = text;
   caretEl.style.display = typing ? "inline-block" : "none";
   if (!typing && window.hljs) {
+    editorEl.className = langFor(activeTab);
     editorEl.removeAttribute("data-highlighted");
     delete editorEl.dataset.highlighted;
     hljs.highlightElement(editorEl);
@@ -99,6 +124,7 @@ function renderStaticEditor(code) {
   editorEl.textContent = code || "";
   caretEl.style.display = "none";
   if (window.hljs) {
+    editorEl.className = langFor(activeTab);
     editorEl.removeAttribute("data-highlighted");
     delete editorEl.dataset.highlighted;
     hljs.highlightElement(editorEl);
@@ -236,7 +262,7 @@ function correctCode() {
 
 function renderExplain() {
   if (!cur || !cur.step) return;
-  el("explain-progress").textContent = `Step ${cur.step.index + 1} of ${cur.step.total} · Why it matters`;
+  el("explain-progress").textContent = `Level ${cur.step.level} · Step ${cur.step.levelStep} of ${cur.step.levelTotal} · Why it matters`;
   el("explain-title").textContent = cur.step.title;
   el("explain-why").textContent = cur.teach || "";
   el("explain-points").innerHTML = (cur.points || [])
@@ -248,6 +274,7 @@ function renderExplain() {
   if (code) {
     const codeEl = el("explain-code");
     codeEl.textContent = code;
+    codeEl.className = langFor(cur.activeFile);
     codeEl.removeAttribute("data-highlighted");
     delete codeEl.dataset.highlighted;
     if (window.hljs) hljs.highlightElement(codeEl);
@@ -261,8 +288,13 @@ function render() {
   if (!cur) return;
   el("player-count").textContent = `${cur.playerCount} player${cur.playerCount === 1 ? "" : "s"}`;
 
+  // Play the door transition when the level increases.
+  const lvl = cur.step ? cur.step.level : null;
+  if (lvl && lastLevel !== null && lvl > lastLevel) playLevelTransition(lvl);
+  if (lvl) lastLevel = lvl;
+
   if (cur.step) {
-    el("progress").textContent = `Step ${cur.step.index + 1} of ${cur.step.total}`;
+    el("progress").textContent = `Level ${cur.step.level} · Step ${cur.step.levelStep} of ${cur.step.levelTotal}`;
     el("q-title").textContent = cur.step.title;
     el("q-prompt").textContent = cur.step.prompt;
   } else if (cur.phase === "finished") {

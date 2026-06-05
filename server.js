@@ -43,6 +43,12 @@ const state = {
 
 const currentStep = () => (state.stepIndex >= 0 ? steps[state.stepIndex] : null);
 const fileOf = (s) => (s && s.file) || DEFAULT_FILE;
+const levelOf = (s) => (s && s.level) || 1;
+function levelInfo(s) {
+  const lvl = levelOf(s);
+  const same = steps.filter((x) => levelOf(x) === lvl);
+  return { level: lvl, levelStep: same.indexOf(s) + 1, levelTotal: same.length };
+}
 const correctOption = () => currentStep()?.options.find((o) => o.correct);
 const playerList = () => Object.values(players).filter((p) => p.name);
 
@@ -64,6 +70,7 @@ function publicStep() {
     title: s.title,
     prompt: s.prompt,
     kind: s.kind || "code",
+    ...levelInfo(s),
     options: s.options.map((o) => ({ id: o.id, label: o.label, code: o.code })),
   };
 }
@@ -96,11 +103,15 @@ function broadcast() {
 }
 
 function goToStep(i) {
+  const prev = state.stepIndex >= 0 ? steps[state.stepIndex] : null;
   state.stepIndex = i;
   state.phase = "voting";
   state.votes = {};
   state.voters = {};
   for (const o of steps[i].options) state.votes[o.id] = 0;
+  // Crossing into a new level starts the editor on a fresh slate; the Stage
+  // plays the door animation to cover the swap.
+  if (prev && levelOf(steps[i]) !== levelOf(prev)) state.committed = {};
   broadcast();
 }
 

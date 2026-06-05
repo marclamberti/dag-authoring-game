@@ -77,9 +77,11 @@ function assert(cond, msg) {
   // Drive the remaining rounds; verify per-file commits, report seeding, and
   // that steps 12+ build the downstream DAG.
   const STEPS = require("./steps.js");
+  const lvl = (i) => STEPS[i].level || 1;
   let s = st2;
   let seededReport = false;
   let builtReport = false;
+  let levelResetClearedL1 = false;
   while (true) {
     const idx = s.step.index;
     alice.emit("vote", { optionId: STEPS[idx].options.find((o) => o.correct).id });
@@ -92,7 +94,12 @@ function assert(cond, msg) {
       assert(false, `step ${idx + 1} committed into ${f}`);
     }
     if (idx === 10 && s.files["dags/sales_report.py"]) seededReport = true;
-    if (idx >= 11 && s.activeFile === "dags/sales_report.py") builtReport = true;
+    if (idx >= 11 && lvl(idx) === 1 && s.activeFile === "dags/sales_report.py") builtReport = true;
+    // First step of Level 2: Level 1 files should have been cleared (fresh slate).
+    if (lvl(idx) === 2 && idx > 0 && lvl(idx - 1) === 1) {
+      levelResetClearedL1 = !s.files["dags/sales_pipeline.py"];
+      assert(s.step.level === 2, "level switches to 2 for the Blueprint steps");
+    }
     if (idx + 1 >= STEPS.length) {
       const fin = next(stage, "state");
       stage.emit("next");
@@ -104,11 +111,14 @@ function assert(cond, msg) {
     s = await nx;
   }
   assert(seededReport, "step 11 seeds dags/sales_report.py");
-  assert(builtReport, "steps 12+ build dags/sales_report.py");
+  assert(builtReport, "Level 1 steps 12-14 build dags/sales_report.py");
+  assert(levelResetClearedL1, "entering Level 2 clears the Level 1 files (fresh slate)");
   assert(s.phase === "finished", "session finishes after the last step");
   assert(
-    s.files["dags/sales_pipeline.py"] && s.files["dags/sales_report.py"],
-    "both DAG files are present at the end"
+    s.files["dags/templates/blueprints.py"] &&
+      s.files["dags/sales.dag.yaml"] &&
+      s.files["dags/loader.py"],
+    "Level 2 builds blueprints.py, sales.dag.yaml, and loader.py"
   );
 
   console.log(`\n${failures === 0 ? "ALL PASS ✅" : failures + " FAILED ❌"}`);

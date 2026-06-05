@@ -68,6 +68,13 @@
     </aside>
   </div>
 
+  <!-- Level transition: doors slide shut, show the level, slide open -->
+  <div class="level-doors" id="level-doors" aria-hidden="true">
+    <div class="door door-left"></div>
+    <div class="door door-right"></div>
+    <div class="level-label" id="level-label"></div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
