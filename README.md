@@ -55,20 +55,28 @@ that host. On the same LAN you can instead share `http://<your-LAN-IP>:3000/`.
 
 ## The build-script (what gets voted on)
 
-All 11 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
-else needs to change. The arc:
+All 14 rounds live in [`steps.js`](./steps.js), edit/reorder freely, nothing
+else needs to change. Two files get built (one editor tab each). The arc:
+
+**`dags/sales_pipeline.py`**
 
 1. Instantiate the DAG (`@dag` decorator)
 2. Schedule (`@daily`), teases Asset scheduling
 3. `start_date` (static datetime, not `datetime.now()`; Airflow 3 defaults `catchup=False`)
 4. Define the first task (`@task` vs `PythonOperator`)
 5. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
-6. No top-level code (the `extract` API call goes inside the task)
+6. No top-level code (read the API URL from a `Variable` inside the task)
 7. Pass data downstream (date → extract → transform via XCom)
 8. Make `load` resilient (`retries`, `retry_delay`, exponential backoff, `execution_timeout`)
 9. Wire dependencies the TaskFlow way
 10. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
-11. **Trigger a downstream DAG**, emit an `Asset` outlet; a second editor tab shows the consumer DAG (Airflow 3 spotlight)
+11. **Trigger a downstream DAG**, emit an `Asset` outlet; a second tab seeds the consumer DAG
+
+**`dags/sales_report.py`** (the downstream DAG)
+
+12. **Dynamic task mapping** (`.expand()`), one report per region instead of a loop
+13. **Task groups** (`@task_group`), readable, modular, reusable, mappable
+14. **Deferrable mode** (`deferrable=True`), wait via the triggerer without holding a slot
 
 ### Editing a round
 

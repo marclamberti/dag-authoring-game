@@ -32,15 +32,17 @@ app.get("/stage", (_req, res) =>
 
 // ── Session state ──────────────────────────────────────────────────────────
 const players = {}; // socketId -> { name, score }
+const DEFAULT_FILE = "dags/sales_pipeline.py";
 const state = {
   phase: "lobby", // lobby | voting | revealed | explaining | finished
   stepIndex: -1,
   votes: {}, // optionId -> count (current step)
   voters: {}, // socketId -> optionId (current step)
-  committedCode: "", // code currently shown in the editor
+  committed: {}, // filename -> committed code (one entry per file being built)
 };
 
 const currentStep = () => (state.stepIndex >= 0 ? steps[state.stepIndex] : null);
+const fileOf = (s) => (s && s.file) || DEFAULT_FILE;
 const correctOption = () => currentStep()?.options.find((o) => o.correct);
 const playerList = () => Object.values(players).filter((p) => p.name);
 
@@ -80,10 +82,10 @@ function fullState() {
     correctId: postVote ? correctOption()?.id : null,
     teach: explaining ? s?.teach : null,
     points: explaining ? s?.points || [] : null,
-    // The downstream-DAG tab appears once revealed (its schedule would otherwise
-    // hint the answer during voting).
-    downstream: postVote ? s?.downstream || null : null,
-    committedCode: state.committedCode,
+    // Per-file committed code (one tab each on the Stage) and the file the
+    // current step is building (the editor auto-focuses it).
+    files: state.committed,
+    activeFile: s ? fileOf(s) : null,
     playerCount: playerList().length,
     leaderboard: leaderboard(),
   };
@@ -135,7 +137,7 @@ io.on("connection", (socket) => {
   // ----- Stage controls -----
   socket.on("start", () => {
     if (state.phase === "lobby" || state.phase === "finished") {
-      state.committedCode = "";
+      state.committed = {};
       goToStep(0);
     }
   });
@@ -153,10 +155,16 @@ io.on("connection", (socket) => {
         score: players[sid] ? players[sid].score : 0,
       });
     }
-    // Commit the best-practice snippet into the editor at reveal time, so the
-    // code appears as the result is shown (not later on Next).
+    // Commit the best-practice snippet into this step's file at reveal time, so
+    // the code appears as the result is shown (not later on Next).
     const s = currentStep();
-    if (s.snapshot !== undefined) state.committedCode = s.snapshot;
+    if (s.snapshot !== undefined) state.committed[fileOf(s)] = s.snapshot;
+    // Seed any additional files (e.g. the downstream DAG) the first time only.
+    if (s.seed) {
+      for (const [f, code] of Object.entries(s.seed)) {
+        if (state.committed[f] === undefined) state.committed[f] = code;
+      }
+    }
     broadcast();
   });
 
@@ -183,7 +191,7 @@ io.on("connection", (socket) => {
     state.stepIndex = -1;
     state.votes = {};
     state.voters = {};
-    state.committedCode = "";
+    state.committed = {};
     for (const id in players) players[id].score = 0;
     broadcast();
   });

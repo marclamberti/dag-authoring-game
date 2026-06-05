@@ -13,9 +13,12 @@ editorBody.appendChild(hl);
 let hlTimer = null;
 
 let cur = null; // last full state
-let displayed = ""; // text currently in the editor
+let displayed = ""; // text currently shown for the active build file
+let displayedFile = null; // which file `displayed` belongs to
 let typingTimer = null;
-let activeTab = "main"; // "main" = built DAG, "downstream" = consumer DAG
+let activeTab = null; // filename currently viewed
+let lastBuildFile = null; // last step's build file (to auto-switch tabs)
+const FILE_ORDER = ["dags/sales_pipeline.py", "dags/sales_report.py"];
 
 // ── Join URL + QR ────────────────────────────────────────────
 const joinUrl = location.origin + "/";
@@ -85,7 +88,8 @@ function flashChange(prev, next) {
   hlTimer = setTimeout(() => hl.classList.remove("show"), 2400);
 }
 
-// Render a read-only file (the downstream DAG tab): no typing, no highlight band.
+// Render a read-only file (a tab that isn't the current build target):
+// no typing, no highlight band. Does NOT touch `displayed`.
 function renderStaticEditor(code) {
   if (typingTimer) {
     clearInterval(typingTimer);
@@ -102,36 +106,66 @@ function renderStaticEditor(code) {
   editorBody.scrollTop = 0;
 }
 
-function renderEditorForTab() {
-  if (activeTab === "downstream" && cur && cur.downstream) {
-    renderStaticEditor(cur.downstream.code);
-  } else {
-    setEditor(cur ? cur.committedCode : "");
-  }
+// Ordered list of file tabs: known files first, then the active build file.
+function tabNames(files, buildFile) {
+  const set = new Set(Object.keys(files));
+  if (buildFile) set.add(buildFile);
+  const names = [];
+  for (const f of FILE_ORDER) if (set.has(f)) { names.push(f); set.delete(f); }
+  for (const f of set) names.push(f);
+  return names.length ? names : [FILE_ORDER[0]];
 }
 
-// Editor file tabs: always the built DAG, plus the downstream DAG once revealed.
-function renderTabs() {
-  const tabsEl = el("tabs");
-  const hasDownstream = !!(cur && cur.downstream);
-  if (!hasDownstream && activeTab === "downstream") activeTab = "main";
-  const tabs = [{ id: "main", label: "dags/sales_pipeline.py" }];
-  if (hasDownstream) tabs.push({ id: "downstream", label: cur.downstream.file });
-  tabsEl.innerHTML = tabs
+// Recompute tabs + editor from `cur`. Auto-focuses the file the step builds,
+// types diffs within that file, and shows other files read-only.
+function repaintEditor() {
+  if (cur && cur.phase === "lobby") {
+    displayed = "";
+    displayedFile = null;
+    lastBuildFile = null;
+  }
+  const files = (cur && cur.files) || {};
+  const buildFile = (cur && cur.activeFile) || null;
+  if (buildFile && buildFile !== lastBuildFile) {
+    activeTab = buildFile;
+    lastBuildFile = buildFile;
+  }
+  const names = tabNames(files, buildFile);
+  if (!activeTab || !names.includes(activeTab)) activeTab = names[0];
+
+  // tabs
+  el("tabs").innerHTML = names
     .map(
-      (t) =>
-        `<button class="tab ${activeTab === t.id ? "active" : ""}" data-tab="${t.id}">${escapeHtml(
-          t.label
+      (n) =>
+        `<button class="tab ${activeTab === n ? "active" : ""}" data-tab="${escapeHtml(n)}">${escapeHtml(
+          n
         )}</button>`
     )
     .join("");
-  tabsEl.querySelectorAll("button").forEach((b) =>
-    b.addEventListener("click", () => {
-      activeTab = b.dataset.tab;
-      renderTabs();
-      renderEditorForTab();
-    })
-  );
+  el("tabs")
+    .querySelectorAll("button")
+    .forEach((b) =>
+      b.addEventListener("click", () => {
+        activeTab = b.dataset.tab;
+        repaintEditor();
+      })
+    );
+
+  // editor body
+  const code = files[activeTab] || "";
+  if (activeTab === buildFile) {
+    if (displayedFile !== buildFile) {
+      // Switched to a new build file: show it as-is (don't diff-type from the
+      // previous file), then subsequent reveals type the in-file changes.
+      renderStaticEditor(code);
+      displayed = code;
+      displayedFile = buildFile;
+    } else {
+      setEditor(code);
+    }
+  } else {
+    renderStaticEditor(code);
+  }
 }
 
 // ── Rendering ────────────────────────────────────────────────
@@ -253,8 +287,7 @@ function render() {
   renderOptions();
   renderLeaderboard();
   renderControls();
-  renderTabs();
-  renderEditorForTab();
+  repaintEditor();
 }
 
 function escapeHtml(s) {

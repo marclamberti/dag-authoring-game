@@ -32,7 +32,7 @@ function assert(cond, msg) {
   const st = await started;
   assert(st.phase === "voting", "session starts in voting phase");
   assert(st.step && st.step.index === 0, "first step loaded");
-  assert(st.committedCode === "", "editor empty at step 1");
+  assert(Object.keys(st.files || {}).length === 0, "editor empty at step 1");
 
   const correctId = require("./steps.js")[0].options.find((o) => o.correct).id;
   const wrongId = require("./steps.js")[0].options.find((o) => !o.correct).id;
@@ -55,7 +55,7 @@ function assert(cond, msg) {
   assert(rev.leaderboard[0].name === "Alice" && rev.leaderboard[0].score === 100,
     "Alice tops the leaderboard");
   assert(rev.points == null, "explanation points hidden until Show explanation");
-  assert(rev.committedCode === require("./steps.js")[0].snapshot,
+  assert(rev.files["dags/sales_pipeline.py"] === require("./steps.js")[0].snapshot,
     "best-practice code committed into the editor at Reveal");
 
   // Show explanation -> phase becomes explaining, slide content exposed
@@ -71,8 +71,45 @@ function assert(cond, msg) {
   stage.emit("next");
   const st2 = await committed;
   const expected = require("./steps.js")[0].snapshot;
-  assert(st2.committedCode === expected, "step-1 code persists in the editor after Next");
+  assert(st2.files["dags/sales_pipeline.py"] === expected, "step-1 code persists in the editor after Next");
   assert(st2.step.index === 1 && st2.phase === "voting", "advanced to step 2, voting");
+
+  // Drive the remaining rounds; verify per-file commits, report seeding, and
+  // that steps 12+ build the downstream DAG.
+  const STEPS = require("./steps.js");
+  let s = st2;
+  let seededReport = false;
+  let builtReport = false;
+  while (true) {
+    const idx = s.step.index;
+    alice.emit("vote", { optionId: STEPS[idx].options.find((o) => o.correct).id });
+    await wait(50);
+    const revd = next(stage, "state");
+    stage.emit("reveal");
+    s = await revd;
+    const f = STEPS[idx].file || "dags/sales_pipeline.py";
+    if (s.files[f] !== STEPS[idx].snapshot) {
+      assert(false, `step ${idx + 1} committed into ${f}`);
+    }
+    if (idx === 10 && s.files["dags/sales_report.py"]) seededReport = true;
+    if (idx >= 11 && s.activeFile === "dags/sales_report.py") builtReport = true;
+    if (idx + 1 >= STEPS.length) {
+      const fin = next(stage, "state");
+      stage.emit("next");
+      s = await fin;
+      break;
+    }
+    const nx = next(stage, "state");
+    stage.emit("next");
+    s = await nx;
+  }
+  assert(seededReport, "step 11 seeds dags/sales_report.py");
+  assert(builtReport, "steps 12+ build dags/sales_report.py");
+  assert(s.phase === "finished", "session finishes after the last step");
+  assert(
+    s.files["dags/sales_pipeline.py"] && s.files["dags/sales_report.py"],
+    "both DAG files are present at the end"
+  );
 
   console.log(`\n${failures === 0 ? "ALL PASS ✅" : failures + " FAILED ❌"}`);
   stage.close(); alice.close(); bob.close();

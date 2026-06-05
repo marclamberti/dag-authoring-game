@@ -18,7 +18,12 @@
  *   `points`  -> the bullet takeaways (the slide content that replaces slides)
  * plus the best-practice snippet (the `correct` option's `code`).
  *
- * Pipeline being built: get_date -> extract -> transform -> load.
+ * Each step targets a `file` (default "dags/sales_pipeline.py"); a step can also
+ * `seed` another file. The Stage shows one editor tab per file and focuses the
+ * step's file. Two files get built:
+ *   dags/sales_pipeline.py : get_date -> extract -> transform -> load (steps 1-11)
+ *   dags/sales_report.py   : the Asset consumer, then dynamic task mapping,
+ *                            task groups, and a deferrable sensor (steps 12-14)
  *
  * To extend the webinar: add/reorder objects here. Nothing else needs to change.
  */
@@ -533,11 +538,10 @@ sales_pipeline()
       "Downstream DAGs `schedule=[Asset(...)]` and fire the moment it updates.",
       "No sensors burning worker slots, no brittle TriggerDagRunOperator timing.",
     ],
-    // Shown as a second editor tab on the Stage once revealed: the consumer DAG
-    // that is scheduled on the Asset this step emits.
-    downstream: {
-      file: "dags/sales_report.py",
-      code: `from airflow.sdk import Asset, dag, task
+    // On reveal, seed the downstream DAG file (a second editor tab) with the
+    // consumer scheduled on the Asset this step emits. Steps 12+ build it out.
+    seed: {
+      "dags/sales_report.py": `from airflow.sdk import Asset, dag, task
 
 
 @dag(schedule=[Asset("clean_sales")])
@@ -604,6 +608,174 @@ def sales_pipeline():
 
 
 sales_pipeline()
+`,
+  },
+
+  // 12 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "dynamic_mapping",
+    kind: "code",
+    file: "dags/sales_report.py",
+    title: "Step 12: Build one report per region",
+    prompt: "We need a report for each region. How do we create the tasks?",
+    teach:
+      "Use dynamic task mapping: `.expand()` creates one task instance per input at " +
+      "run time, so the graph scales with the data. A Python for-loop fixes the count " +
+      "at parse time, clutters the file, and can't react to runtime values.",
+    points: [
+      "`.expand()` creates one mapped task instance per input, at run time.",
+      "It scales automatically when the number of inputs changes.",
+      "A parse-time for-loop hardcodes the count and bloats the graph.",
+      "Mapped instances collapse under a single task in the UI.",
+    ],
+    options: [
+      { id: "a", label: "build_report.expand(region=get_regions())", correct: true,
+        code: "build_report.expand(region=get_regions())" },
+      { id: "b", label: "for r in get_regions(): build_report(r)",
+        code: "for r in get_regions():\n    build_report(r)" },
+      { id: "c", label: "hardcode one task per region",
+        code: 'build_report("us")\nbuild_report("eu")\nbuild_report("apac")' },
+    ],
+    snapshot: `from airflow.sdk import Asset, dag, task
+
+
+@dag(schedule=[Asset("clean_sales")])
+def sales_report():
+
+    @task
+    def get_regions():
+        return ["us", "eu", "apac"]
+
+    @task
+    def build_report(region: str):
+        print(f"Building {region} report")
+
+    build_report.expand(region=get_regions())
+
+
+sales_report()
+`,
+  },
+
+  // 13 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "task_groups",
+    kind: "code",
+    file: "dags/sales_report.py",
+    title: "Step 13: Group related tasks",
+    prompt: "Each region builds then publishes. How do we organize those tasks?",
+    teach:
+      "Wrap related tasks in a `@task_group`. It collapses into one unit in the UI so " +
+      "big DAGs stay readable, makes the structure obvious, and is modular, you can " +
+      "import the group into other DAGs. You can even dynamically map a whole group.",
+    points: [
+      "Task groups bundle related tasks into one collapsible unit in the UI.",
+      "They keep large DAGs readable and the structure obvious.",
+      "A group is modular: import and reuse it across DAGs.",
+      "You can dynamically map an entire task group with `.expand()`.",
+    ],
+    options: [
+      { id: "a", label: "@task_group bundling build + publish", correct: true,
+        code: "@task_group\ndef report(region):\n    publish(build(region))" },
+      { id: "b", label: "leave them as separate top-level tasks",
+        code: "build(region)\npublish(region)" },
+      { id: "c", label: "do everything in one big task",
+        code: "@task\ndef build_and_publish(region): ..." },
+    ],
+    snapshot: `from airflow.sdk import Asset, dag, task, task_group
+
+
+@dag(schedule=[Asset("clean_sales")])
+def sales_report():
+
+    @task
+    def get_regions():
+        return ["us", "eu", "apac"]
+
+    @task_group
+    def report(region: str):
+        @task
+        def build(region: str):
+            print(f"Building {region} report")
+
+        @task
+        def publish(region: str):
+            print(f"Publishing {region} report")
+
+        publish(build(region))
+
+    report.expand(region=get_regions())
+
+
+sales_report()
+`,
+  },
+
+  // 14 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "deferrable",
+    kind: "code",
+    file: "dags/sales_report.py",
+    title: "Step 14: Wait without wasting a worker",
+    prompt: "Reports should wait for market close. How do we wait efficiently?",
+    teach:
+      "Use a deferrable operator/sensor (`deferrable=True`). It releases the worker " +
+      "slot while waiting and resumes via the triggerer once the condition is met, so " +
+      "thousands can wait at once. Poke-mode sensors and `time.sleep()` hold a slot the " +
+      "whole time.",
+    points: [
+      "Deferrable operators release the worker slot while waiting.",
+      "They resume via the triggerer when the condition is met.",
+      "Thousands can wait concurrently without exhausting worker slots.",
+      "Poke-mode sensors and `time.sleep()` block a slot the whole time.",
+    ],
+    options: [
+      { id: "a", label: "DateTimeSensor(..., deferrable=True)", correct: true,
+        code:
+          "DateTimeSensor(\n" +
+          '    task_id="wait_for_close",\n' +
+          '    target_time="...",\n' +
+          "    deferrable=True,\n" +
+          ")" },
+      { id: "b", label: "regular sensor in poke mode",
+        code: 'DateTimeSensor(task_id="wait_for_close", target_time="...")' },
+      { id: "c", label: "time.sleep() inside a task",
+        code: "@task\ndef wait():\n    time.sleep(3600)" },
+    ],
+    snapshot: `from airflow.providers.standard.sensors.date_time import DateTimeSensor
+
+from airflow.sdk import Asset, dag, task, task_group
+
+
+@dag(schedule=[Asset("clean_sales")])
+def sales_report():
+
+    wait_for_close = DateTimeSensor(
+        task_id="wait_for_close",
+        target_time="{{ ds }} 18:00:00",
+        deferrable=True,
+    )
+
+    @task
+    def get_regions():
+        return ["us", "eu", "apac"]
+
+    @task_group
+    def report(region: str):
+        @task
+        def build(region: str):
+            print(f"Building {region} report")
+
+        @task
+        def publish(region: str):
+            print(f"Publishing {region} report")
+
+        publish(build(region))
+
+    wait_for_close >> report.expand(region=get_regions())
+
+
+sales_report()
 `,
   },
 ];
