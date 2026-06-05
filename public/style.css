@@ -124,7 +124,8 @@ button { font-family: inherit; cursor: pointer; }
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: var(--space-5);
-  min-height: 100vh;
+  height: 100vh;          /* lock to one screen: editor scrolls, page never does */
+  overflow: hidden;
   padding: var(--space-6);
 }
 
@@ -149,6 +150,7 @@ button { font-family: inherit; cursor: pointer; }
 .dot.r { background: #ff5f56; } .dot.y { background: #ffbd2e; } .dot.g { background: #27c93f; }
 .editor-file { margin-left: var(--space-1); font-size: 13px; color: var(--text-alt); }
 .editor-body {
+  position: relative;
   flex: 1;
   margin: 0;
   padding: var(--space-4) var(--space-5);
@@ -162,6 +164,17 @@ button { font-family: inherit; cursor: pointer; }
   tab-size: 4;
 }
 .editor-body code.hljs { background: transparent; padding: 0; }
+.editor-hl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(145, 70, 255, 0.16);
+  border-left: 3px solid var(--purple);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.editor-hl.show { opacity: 1; }
 .editor-body .caret {
   display: inline-block;
   width: 9px;
@@ -175,6 +188,7 @@ button { font-family: inherit; cursor: pointer; }
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
+  overflow: auto;
 }
 
 .q-title {
@@ -409,13 +423,15 @@ button { font-family: inherit; cursor: pointer; }
    RESPONSIVE  (DESIGN.md §8)
    ========================================================================== */
 
-/* Tablet & small desktop: stack the stage into one column */
+/* Tablet & small desktop: stack into one column and allow normal page scroll */
 @media (max-width: 1023px) {
   .stage {
     grid-template-columns: 1fr;
-    min-height: auto;
+    height: auto;
+    overflow: visible;
     padding: var(--space-4);
   }
+  .side { overflow: visible; }
   .editor-pane { min-height: 50vh; }
   .q-title { font-size: 28px; }
 }

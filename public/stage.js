@@ -6,6 +6,12 @@ const editorEl = el("editor");
 const caretEl = el("caret");
 const editorBody = editorEl.closest(".editor-body");
 
+// Highlight band that flashes over the lines committed at Reveal.
+const hl = document.createElement("div");
+hl.className = "editor-hl";
+editorBody.appendChild(hl);
+let hlTimer = null;
+
 let cur = null; // last full state
 let displayed = ""; // text currently in the editor
 let typingTimer = null;
@@ -35,6 +41,7 @@ function setEditor(target) {
     return;
   }
   if (typingTimer) clearInterval(typingTimer);
+  const prev = displayed;
   let i = 0;
   const min = Math.min(displayed.length, target.length);
   while (i < min && displayed[i] === target[i]) i++;
@@ -48,8 +55,33 @@ function setEditor(target) {
       clearInterval(typingTimer);
       typingTimer = null;
       displayed = target;
+      flashChange(prev, target);
     }
   }, TICK);
+}
+
+// Scroll the changed lines into view and flash a highlight band over them, so
+// the just-committed code is always front-and-center (no scrolling to find it).
+function flashChange(prev, next) {
+  if (!next || prev === next) return;
+  let i = 0;
+  const min = Math.min(prev.length, next.length);
+  while (i < min && prev[i] === next[i]) i++;
+  let j = 0;
+  while (j < min - i && prev[prev.length - 1 - j] === next[next.length - 1 - j]) j++;
+  const startLine = (next.slice(0, i).match(/\n/g) || []).length;
+  const endLine = (next.slice(0, Math.max(i, next.length - j)).match(/\n/g) || []).length;
+  const cs = getComputedStyle(editorBody);
+  const lh = parseFloat(cs.lineHeight) || 30;
+  const padTop = parseFloat(cs.paddingTop) || 0;
+  const top = padTop + startLine * lh;
+  hl.style.top = top + "px";
+  hl.style.height = Math.max(1, endLine - startLine + 1) * lh + "px";
+  hl.classList.add("show");
+  // Bring the change into view with a little context above it.
+  editorBody.scrollTop = Math.max(0, top - lh * 2);
+  clearTimeout(hlTimer);
+  hlTimer = setTimeout(() => hl.classList.remove("show"), 2400);
 }
 
 // ── Rendering ────────────────────────────────────────────────
