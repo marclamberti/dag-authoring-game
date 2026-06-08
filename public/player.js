@@ -73,6 +73,11 @@ function render() {
     el("wait-title").textContent = "That's a wrap!";
     el("wait-sub").textContent = "You helped build a best-practice DAG.";
     setWaitScore();
+  } else if (phase === "teaching") {
+    show("wait-screen");
+    el("wait-title").textContent = "Watch the screen";
+    el("wait-sub").textContent = "Learn this, then the question is coming up…";
+    setWaitScore();
   } else {
     show("vote-screen");
     renderVote();

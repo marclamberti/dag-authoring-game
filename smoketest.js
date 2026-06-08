@@ -82,22 +82,37 @@ function assert(cond, msg) {
   let seededReport = false;
   let builtReport = false;
   let levelResetClearedL1 = false;
+  let preloadedBefore = false;
+  let explainFirstTaught = false;
+  let teachShowedCode = false;
   while (true) {
     const idx = s.step.index;
+    // Explain-first steps open on the teaching slide; open the vote first.
+    if (STEPS[idx].explainFirst) {
+      assert(s.phase === "teaching", `step ${idx + 1} opens in teaching (explain-first)`);
+      explainFirstTaught = true;
+      if (typeof s.teachCode === "string" && s.teachCode.length > 0) teachShowedCode = true;
+      const v = next(stage, "state");
+      stage.emit("startVote");
+      s = await v;
+    }
     alice.emit("vote", { optionId: STEPS[idx].options.find((o) => o.correct).id });
     await wait(50);
     const revd = next(stage, "state");
     stage.emit("reveal");
     s = await revd;
     const f = STEPS[idx].file || "dags/sales_pipeline.py";
-    if (s.files[f] !== STEPS[idx].snapshot) {
+    // Steps that build code commit their snapshot at reveal (framing steps have none).
+    if (STEPS[idx].snapshot !== undefined && s.files[f] !== STEPS[idx].snapshot) {
       assert(false, `step ${idx + 1} committed into ${f}`);
     }
     if (idx === 10 && s.files["dags/sales_report.py"]) seededReport = true;
     if (idx >= 11 && lvl(idx) === 1 && s.activeFile === "dags/sales_report.py") builtReport = true;
-    // First step of Level 2: Level 1 files should have been cleared (fresh slate).
+    // First step of Level 2: L1 files cleared (fresh slate) + "before" DAGs preloaded.
     if (lvl(idx) === 2 && idx > 0 && lvl(idx - 1) === 1) {
       levelResetClearedL1 = !s.files["dags/sales_pipeline.py"];
+      preloadedBefore =
+        !!s.files["dags/customers.py"] && !!s.files["dags/orders.py"];
       assert(s.step.level === 2, "level switches to 2 for the Blueprint steps");
     }
     if (idx + 1 >= STEPS.length) {
@@ -113,12 +128,20 @@ function assert(cond, msg) {
   assert(seededReport, "step 11 seeds dags/sales_report.py");
   assert(builtReport, "Level 1 steps 12-14 build dags/sales_report.py");
   assert(levelResetClearedL1, "entering Level 2 clears the Level 1 files (fresh slate)");
+  assert(preloadedBefore, "Level 2 preloads the 'before' DAGs (customers.py + orders.py)");
+  assert(explainFirstTaught, "Level 2 build steps open on the teaching slide before the vote");
+  assert(teachShowedCode, "the teaching slide shows the code snippet before the vote");
   assert(s.phase === "finished", "session finishes after the last step");
   assert(
     s.files["dags/templates/blueprints.py"] &&
       s.files["dags/sales.dag.yaml"] &&
+      s.files["dags/marketing.dag.yaml"] &&
       s.files["dags/loader.py"],
-    "Level 2 builds blueprints.py, sales.dag.yaml, and loader.py"
+    "Level 2 builds the Blueprint, sales.dag.yaml, marketing.dag.yaml, and loader.py"
+  );
+  assert(
+    s.files["dags/customers.py"] && s.files["dags/orders.py"],
+    "the 'before' DAGs persist as reference tabs through Level 2"
   );
 
   console.log(`\n${failures === 0 ? "ALL PASS ✅" : failures + " FAILED ❌"}`);

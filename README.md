@@ -82,16 +82,20 @@ editor on a fresh slate (scores carry over). The arc:
 13. **Task groups** (`@task_group`), readable, modular, reusable, mappable
 14. **Deferrable mode** (`deferrable=True`), wait via the triggerer without holding a slot
 
-## Level 2, Blueprint (compose validated DAGs from YAML)
+## Level 2, Blueprint (from copy-pasted DAGs to validated templates)
 
-Builds `dags/templates/blueprints.py`, `dags/sales.dag.yaml`, and `dags/loader.py`.
+Opens on a "before" state: two drifted, hand-copied DAGs (`dags/customers.py`,
+`dags/orders.py`) are preloaded as read-only reference tabs. Each round then
+improves on them, building `dags/templates/blueprints.py`, `dags/sales.dag.yaml`,
+`dags/marketing.dag.yaml`, and `dags/loader.py`.
 
-1. **Why Blueprint** — reusable validated templates vs copy-pasted DAGs
-2. **Define a Blueprint** — `Blueprint[Config]` + `render()` returning a `TaskGroup`
+1. **The problem** — 50 analysts copy a DAG → drift, no validation (the before-DAGs)
+2. **Define a Blueprint** — extract the extract→load pattern into `Blueprint[Config].render()`
 3. **Validate the config** — Pydantic `Field` + `ConfigDict(extra="forbid")`
-4. **Compose a DAG in YAML** — a `*.dag.yaml` with `steps` naming blueprints
-5. **Wire the steps** — `depends_on: [...]` in YAML
-6. **Load the YAML DAGs** — `dags/loader.py` calling `build_all()`
+4. **Compose a DAG in YAML** — `sales.dag.yaml`; the ~25-line DAG becomes a few lines
+5. **Wire the steps** — `depends_on: [...]`
+6. **A second pipeline, for free** — `marketing.dag.yaml` reuses the blueprint, no Python
+7. **Load the YAML DAGs** — `dags/loader.py` calling `build_all_dags()`
 
 ### Editing a round
 

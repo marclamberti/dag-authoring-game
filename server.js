@@ -34,7 +34,7 @@ app.get("/stage", (_req, res) =>
 const players = {}; // socketId -> { name, score }
 const DEFAULT_FILE = "dags/sales_pipeline.py";
 const state = {
-  phase: "lobby", // lobby | voting | revealed | explaining | finished
+  phase: "lobby", // lobby | teaching | voting | revealed | explaining | finished
   stepIndex: -1,
   votes: {}, // optionId -> count (current step)
   voters: {}, // socketId -> optionId (current step)
@@ -70,6 +70,7 @@ function publicStep() {
     title: s.title,
     prompt: s.prompt,
     kind: s.kind || "code",
+    explainFirst: !!s.explainFirst,
     ...levelInfo(s),
     options: s.options.map((o) => ({ id: o.id, label: o.label, code: o.code })),
   };
@@ -79,7 +80,9 @@ function fullState() {
   // The correct answer is exposed once revealed (for the result highlight);
   // the explanation slide content ships only during the explaining phase.
   const postVote = state.phase === "revealed" || state.phase === "explaining";
-  const explaining = state.phase === "explaining";
+  // The explanation slide content shows during the post-vote "explaining" phase
+  // AND during the pre-vote "teaching" phase (explain-first steps).
+  const slide = state.phase === "explaining" || state.phase === "teaching";
   const s = currentStep();
   return {
     phase: state.phase,
@@ -87,8 +90,11 @@ function fullState() {
     votes: state.votes,
     totalVotes: Object.values(state.votes).reduce((a, b) => a + b, 0),
     correctId: postVote ? correctOption()?.id : null,
-    teach: explaining ? s?.teach : null,
-    points: explaining ? s?.points || [] : null,
+    teach: slide ? s?.teach : null,
+    points: slide ? s?.points || [] : null,
+    // During the pre-vote teaching slide (explain-first steps), show the snippet
+    // being introduced so the vote is grounded in code the learner has seen.
+    teachCode: state.phase === "teaching" ? correctOption()?.code || "" : null,
     // Per-file committed code (one tab each on the Stage) and the file the
     // current step is building (the editor auto-focuses it).
     files: state.committed,
@@ -105,13 +111,21 @@ function broadcast() {
 function goToStep(i) {
   const prev = state.stepIndex >= 0 ? steps[state.stepIndex] : null;
   state.stepIndex = i;
-  state.phase = "voting";
+  // Explain-first steps open on the teaching slide before the vote.
+  state.phase = steps[i].explainFirst ? "teaching" : "voting";
   state.votes = {};
   state.voters = {};
   for (const o of steps[i].options) state.votes[o.id] = 0;
   // Crossing into a new level starts the editor on a fresh slate; the Stage
   // plays the door animation to cover the swap.
   if (prev && levelOf(steps[i]) !== levelOf(prev)) state.committed = {};
+  // Preload reference files for this step (e.g. the "before" DAGs), so they show
+  // during voting, before any code is committed.
+  if (steps[i].preload) {
+    for (const [f, code] of Object.entries(steps[i].preload)) {
+      if (state.committed[f] === undefined) state.committed[f] = code;
+    }
+  }
   broadcast();
 }
 
@@ -151,6 +165,13 @@ io.on("connection", (socket) => {
       state.committed = {};
       goToStep(0);
     }
+  });
+
+  // Explain-first: after the teaching slide, open the vote.
+  socket.on("startVote", () => {
+    if (state.phase !== "teaching") return;
+    state.phase = "voting";
+    broadcast();
   });
 
   socket.on("reveal", () => {
