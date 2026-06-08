@@ -22,6 +22,8 @@ let lastLevel = null; // last step's level (to play the door transition)
 const FILE_ORDER = [
   "dags/sales_pipeline.py",
   "dags/sales_report.py",
+  "dags/daily_export.py",
+  "dags/load_config.py",
   "dags/customers.py",
   "dags/orders.py",
   "dags/templates/blueprints.py",
@@ -211,6 +213,14 @@ function renderOptions() {
   }
   const revealed = cur.phase === "revealed";
   const total = cur.totalVotes || 0;
+  // "bug" rounds have no options; players tap a line in the code on the left.
+  if (cur.step.kind === "bug") {
+    const line = revealed && cur.correctId ? cur.correctId.slice(1) : null;
+    wrap.innerHTML = revealed
+      ? `<div class="bug-answer">🐛 The bug is on <b>line ${line}</b>, highlighted on the left.</div>`
+      : `<div class="bug-hint">Tap the broken line on your phone. <span class="opt-pct">${total} vote${total === 1 ? "" : "s"}</span></div>`;
+    return;
+  }
   wrap.innerHTML = cur.step.options
     .map((o) => {
       const c = (cur.votes && cur.votes[o.id]) || 0;
@@ -241,7 +251,7 @@ function renderLeaderboard() {
             (p, i) =>
               `<div class="lead-row"><span class="rank">${i + 1}</span><span class="nm">${escapeHtml(
                 p.name
-              )}</span><span class="sc">${p.score}</span></div>`
+              )}${p.streak >= 2 ? ` <span class="streak">🔥${p.streak}</span>` : ""}</span><span class="sc">${p.score}</span></div>`
           )
           .join("");
 }
@@ -260,7 +270,7 @@ function renderControls() {
 }
 
 function correctCode() {
-  if (!cur || !cur.step || !cur.correctId) return "";
+  if (!cur || !cur.step || !cur.correctId || !cur.step.options) return "";
   const o = cur.step.options.find((x) => x.id === cur.correctId);
   return o ? o.code : "";
 }
@@ -327,11 +337,86 @@ function render() {
   renderOptions();
   renderLeaderboard();
   renderControls();
-  repaintEditor();
+  renderStageCode();
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+// ── Editor area: dispatch by round kind ──────────────────────
+let runTimer = null;
+let runShownFor = -1;
+
+function renderStageCode() {
+  const st = cur && cur.step;
+  if (st && st.kind === "review") return renderDiff(st.diff);
+  if (st && st.kind === "predict_run" && cur.runOutput &&
+      (cur.phase === "revealed" || cur.phase === "explaining"))
+    return renderRun(cur.runOutput, st.index);
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  repaintEditor();
+  // Spot the bug: flash the broken line on reveal.
+  if (st && st.kind === "bug" && cur.phase === "revealed" && cur.correctId)
+    highlightBugLine(parseInt(cur.correctId.slice(1), 10));
+  else hl.classList.remove("bug");
+}
+
+function highlightBugLine(n) {
+  if (!n) return;
+  const cs = getComputedStyle(editorBody);
+  const lh = parseFloat(cs.lineHeight) || 30;
+  const padTop = parseFloat(cs.paddingTop) || 0;
+  const top = padTop + (n - 1) * lh;
+  hl.style.top = top + "px";
+  hl.style.height = lh + "px";
+  hl.classList.add("show", "bug");
+  editorBody.scrollTop = Math.max(0, top - lh * 3);
+}
+
+// You're the reviewer: render the PR diff with +/- coloring.
+function renderDiff(diff) {
+  if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  hl.classList.remove("show", "bug");
+  caretEl.style.display = "none";
+  editorEl.className = "diff";
+  editorEl.innerHTML = (diff || "")
+    .split("\n")
+    .map((ln) => {
+      const c = ln.startsWith("+") ? "diff-add" : ln.startsWith("-") ? "diff-del" : "diff-ctx";
+      return `<span class="${c}">${escapeHtml(ln || " ")}</span>`;
+    })
+    .join("\n");
+  editorBody.scrollTop = 0;
+}
+
+// Predict & run: a terminal that prints the run output line by line on reveal.
+function renderRun(lines, stepIndex) {
+  if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
+  hl.classList.remove("show", "bug");
+  caretEl.style.display = "none";
+  editorEl.className = "run";
+  const paint = (k) => {
+    editorEl.innerHTML = lines
+      .slice(0, k)
+      .map((l) => `<span class="run-line">${escapeHtml(l || " ")}</span>`)
+      .join("\n");
+    editorBody.scrollTop = editorBody.scrollHeight;
+  };
+  if (runShownFor === stepIndex) {
+    if (runTimer) { clearInterval(runTimer); runTimer = null; }
+    return paint(lines.length);
+  }
+  runShownFor = stepIndex;
+  let k = 0;
+  paint(0);
+  if (runTimer) clearInterval(runTimer);
+  runTimer = setInterval(() => {
+    k++;
+    paint(k);
+    if (k >= lines.length) { clearInterval(runTimer); runTimer = null; }
+  }, 240);
 }
 
 // ── Socket events ────────────────────────────────────────────

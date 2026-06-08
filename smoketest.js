@@ -78,12 +78,20 @@ function assert(cond, msg) {
   // that steps 12+ build the downstream DAG.
   const STEPS = require("./steps.js");
   const lvl = (i) => STEPS[i].level || 1;
+  const correctVote = (step) =>
+    step.kind === "bug"
+      ? "L" + step.bugLine
+      : step.kind === "review"
+      ? step.verdict
+      : step.options.find((o) => o.correct).id;
   let s = st2;
   let seededReport = false;
   let builtReport = false;
   let levelResetClearedL1 = false;
   let preloadedBefore = false;
   let explainFirstTaught = false;
+  let maxMult = 0;
+  alice.on("result", (r) => { if (r.multiplier > maxMult) maxMult = r.multiplier; });
   while (true) {
     const idx = s.step.index;
     // Explain-first steps open on the teaching slide; open the vote first.
@@ -94,7 +102,7 @@ function assert(cond, msg) {
       stage.emit("startVote");
       s = await v;
     }
-    alice.emit("vote", { optionId: STEPS[idx].options.find((o) => o.correct).id });
+    alice.emit("vote", { optionId: correctVote(STEPS[idx]) });
     await wait(50);
     const revd = next(stage, "state");
     stage.emit("reveal");
@@ -129,6 +137,7 @@ function assert(cond, msg) {
   assert(levelResetClearedL1, "entering Level 2 clears the Level 1 files (fresh slate)");
   assert(preloadedBefore, "Level 2 preloads the 'before' DAGs (customers.py + orders.py)");
   assert(explainFirstTaught, "Level 2 build steps open on the teaching slide before the vote");
+  assert(maxMult >= 2, "streak multiplier ramps above 1x on consecutive correct answers");
   assert(s.phase === "finished", "session finishes after the last step");
   assert(
     s.files["dags/templates/blueprints.py"] &&

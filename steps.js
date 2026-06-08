@@ -7,23 +7,25 @@
  * after this decision) and the new tail is typed in. Players who voted for the
  * correct option score points.
  *
- * `kind`:
- *   "code"     -> a normal authoring decision; `snapshot` advances the editor.
- *   "predict"  -> a knowledge/prediction round; `snapshot` may just add a
- *                 comment (or be omitted to leave the editor unchanged).
+ * Round `kind` (drives the mechanic + how the Stage/Player render it):
+ *   "code"        -> vote on the best option; `snapshot` advances the editor.
+ *   "predict"     -> a knowledge/prediction vote.
+ *   "predict_run" -> like predict, plus `runOutput` (lines) "run" on reveal.
+ *   "bug"         -> spot the bug: players tap a line of `code`; `bugLine` is the
+ *                    answer. The buggy code shows in the editor.
+ *   "review"      -> you're the reviewer: a `diff` is shown; players Approve /
+ *                    Request changes; `verdict` ("approve"|"request") is correct.
  *
- * After the vote is revealed, the presenter hits "Show explanation", the right
- * panel becomes a slide for this step built from:
- *   `teach`   -> the one-line "why it matters"
- *   `points`  -> the bullet takeaways (the slide content that replaces slides)
- * plus the best-practice snippet (the `correct` option's `code`).
+ * Scoring: a correct answer scores 100 x a streak multiplier (consecutive
+ * correct answers ramp 1x -> 2x -> 3x; a wrong answer resets the streak).
+ *
+ * After the vote, "Show explanation" turns the right panel into a slide built
+ * from `teach` (one-line headline) + `points` (bullets). Explain-first steps
+ * show that slide BEFORE the vote.
  *
  * Each step targets a `file` (default "dags/sales_pipeline.py"); a step can also
- * `seed` another file. The Stage shows one editor tab per file and focuses the
- * step's file. Two files get built:
- *   dags/sales_pipeline.py : get_date -> extract -> transform -> load (steps 1-11)
- *   dags/sales_report.py   : the Asset consumer, then dynamic task mapping,
- *                            task groups, and a deferrable sensor (steps 12-14)
+ * `seed`/`preload` other files (extra editor tabs) and set a `level` (a new
+ * level plays the door transition and starts the editor fresh).
  *
  * To extend the webinar: add/reorder objects here. Nothing else needs to change.
  */
@@ -109,43 +111,21 @@ sales_pipeline()
   // 3 ────────────────────────────────────────────────────────────────────────
   {
     id: "start_date",
-    kind: "code",
+    kind: "review",
     title: "Step 3: Set a start_date",
-    prompt: "What do we pass for start_date?",
+    prompt: "A teammate's PR sets the start_date. Approve, or request changes?",
     teach: "A static start_date keeps runs reproducible; datetime.now() does not.",
     points: [
       "A static `start_date` makes runs deterministic and reproducible.",
       "`datetime.now()` shifts on every parse, Airflow can never settle.",
       "Airflow 3 defaults `catchup=False`, so you don't set catchup anymore.",
     ],
-    options: [
-      { id: "a", label: "static datetime", correct: true,
-        code: "start_date=datetime(2026, 1, 1)" },
-      { id: "b", label: "datetime.now()",
-        code: "start_date=datetime.now()" },
-      { id: "c", label: "days_ago(1)",
-        code: "start_date=days_ago(1)" },
-    ],
-    snapshot: `from datetime import datetime
-
-from airflow.sdk import dag, task
-from airflow.timetables.trigger import MultipleCronTriggerTimetable
-
-
-@dag(
-    schedule=MultipleCronTriggerTimetable(
-        "0 9 * * 1-5",
-        "0 17 * * 1-5",
-        timezone="UTC",
-    ),
-    start_date=datetime(2026, 1, 1),
-)
-def sales_pipeline():
-    pass
-
-
-sales_pipeline()
-`,
+    verdict: "request",
+    diff: ` @dag(
+     schedule=MultipleCronTriggerTimetable("0 9 * * 1-5", "0 17 * * 1-5", timezone="UTC"),
++    start_date=datetime.now(),
+ )
+ def sales_pipeline():`,
   },
 
   // 4 ────────────────────────────────────────────────────────────────────────
@@ -300,11 +280,49 @@ sales_pipeline()
 `,
   },
 
-  // 7 ────────────────────────────────────────────────────────────────────────
+  // 7 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "bug_idempotency",
+    kind: "bug",
+    ephemeral: true,
+    file: "dags/daily_export.py",
+    title: "Step 7: Spot the bug",
+    prompt: "This DAG isn't idempotent, a backfill would use today's date, not the run's. Tap the broken line.",
+    teach: "Use the run's logical date (ds), not datetime.now(), so backfills are reproducible.",
+    points: [
+      "datetime.now() is wall-clock, so a backfill recomputes for today.",
+      "Declare ds as a task parameter; Airflow injects the run's logical date.",
+      "Idempotent tasks make reruns and backfills safe and reproducible.",
+    ],
+    bugLine: 11,
+    code: `from datetime import datetime
+
+from airflow.sdk import dag, task
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def daily_export():
+
+    @task
+    def run_date():
+        return datetime.now().date()
+
+    @task
+    def export(day):
+        print(f"Exporting data for {day}")
+
+    export(run_date())
+
+
+daily_export()
+`,
+  },
+
+  // 8 ────────────────────────────────────────────────────────────────────────
   {
     id: "variable",
     kind: "code",
-    title: "Step 7: Read the API URL from a Variable",
+    title: "Step 8: Read the API URL from a Variable",
     prompt: "The API URL lives in an Airflow Variable. Where do we fetch it?",
     teach: "Read the Variable inside the task, not at the top of the file.",
     points: [
@@ -360,11 +378,48 @@ sales_pipeline()
 `,
   },
 
-  // 8 ────────────────────────────────────────────────────────────────────────
+  // 9 ───────────────────────────────────────────────────────────────────────
+  {
+    id: "bug_toplevel",
+    kind: "bug",
+    ephemeral: true,
+    file: "dags/load_config.py",
+    title: "Step 9: Spot the bug",
+    prompt: "One line here runs on every DAG parse, not at run time. Tap it.",
+    teach: "Top-level code runs on every parse; move I/O inside a task.",
+    points: [
+      "The scheduler re-parses the DAG file constantly.",
+      "A top-level API call runs on every parse, slow and surprising.",
+      "Move it inside a task so it runs only at execution time.",
+    ],
+    bugLine: 6,
+    code: `from datetime import datetime
+
+import requests
+from airflow.sdk import dag, task
+
+config = requests.get("https://api.example.com/config").json()
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def load_config():
+
+    @task
+    def use_config():
+        print(config)
+
+    use_config()
+
+
+load_config()
+`,
+  },
+
+  // 10 ────────────────────────────────────────────────────────────────────────
   {
     id: "pass_data",
     kind: "code",
-    title: "Step 8: Pass data downstream",
+    title: "Step 10: Pass data downstream",
     prompt: "Pass each task's output to the next (date → extract → transform). How?",
     teach: "Pass data with return values (XCom), not globals or files.",
     points: [
@@ -422,11 +477,11 @@ sales_pipeline()
 `,
   },
 
-  // 9 ────────────────────────────────────────────────────────────────────────
+  // 11 ────────────────────────────────────────────────────────────────────────
   {
     id: "resilience",
     kind: "code",
-    title: "Step 9: Make load resilient",
+    title: "Step 11: Make load resilient",
     prompt: "load hits a flaky warehouse. How do we configure it for production?",
     teach: "Production tasks need retries, backoff, and a timeout.",
     points: [
@@ -500,11 +555,11 @@ sales_pipeline()
 `,
   },
 
-  // 10 ────────────────────────────────────────────────────────────────────────
+  // 12 ────────────────────────────────────────────────────────────────────────
   {
     id: "dependencies",
     kind: "code",
-    title: "Step 10: Wire the dependencies",
+    title: "Step 12: Wire the dependencies",
     prompt: "How do we connect get_date → extract → transform → load?",
     teach: "Call the tasks and TaskFlow wires the dependencies for you.",
     points: [
@@ -571,11 +626,11 @@ sales_pipeline()
 `,
   },
 
-  // 11 ───────────────────────────────────────────────────────────────────────
+  // 13 ───────────────────────────────────────────────────────────────────────
   {
     id: "versioning",
-    kind: "predict",
-    title: "Step 11: DAG Versioning (predict!)",
+    kind: "predict_run",
+    title: "Step 13: DAG Versioning (predict!)",
     prompt:
       "You tweak transform and redeploy WHILE a run is in progress. " +
       "Which code does that in-flight run finish with?",
@@ -589,6 +644,19 @@ sales_pipeline()
       { id: "a", label: "v1, the version it started on", correct: true, code: "" },
       { id: "b", label: "v2, the brand-new code", code: "" },
       { id: "c", label: "it crashes and restarts", code: "" },
+    ],
+    // Shown as a live "run" on reveal, demonstrating the answer.
+    runOutput: [
+      "$ deploy v2  (run for 2026-06-01 is mid-flight)",
+      "",
+      "[run 2026-06-01] dag_version=v1   # started before the deploy",
+      "[run 2026-06-01] transform: amount > 0      (v1)",
+      "[run 2026-06-01] state=success   -> finished on v1",
+      "",
+      "[run 2026-06-02] dag_version=v2   # new run after the deploy",
+      "[run 2026-06-02] transform: amount > 100    (v2)",
+      "",
+      "✓ in-flight run completed on v1; new runs use v2",
     ],
     // The editor gets the v2 edit committed so the audience SEES the change that
     // versioning is tracking.
@@ -644,11 +712,11 @@ sales_pipeline()
 `,
   },
 
-  // 12 ───────────────────────────────────────────────────────────────────────
+  // 14 ───────────────────────────────────────────────────────────────────────
   {
     id: "event_driven",
     kind: "code",
-    title: "Step 12: Trigger a downstream DAG",
+    title: "Step 14: Trigger a downstream DAG",
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
@@ -738,12 +806,12 @@ sales_pipeline()
 `,
   },
 
-  // 13 ───────────────────────────────────────────────────────────────────────
+  // 15 ───────────────────────────────────────────────────────────────────────
   {
     id: "dynamic_mapping",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 13: Build one report per region",
+    title: "Step 15: Build one report per region",
     prompt: "We need a report for each region. How do we create the tasks?",
     teach: "One task per input at runtime with .expand(), not a loop.",
     points: [
@@ -781,12 +849,12 @@ sales_report()
 `,
   },
 
-  // 14 ───────────────────────────────────────────────────────────────────────
+  // 16 ───────────────────────────────────────────────────────────────────────
   {
     id: "task_groups",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 14: Group related tasks",
+    title: "Step 16: Group related tasks",
     prompt: "Each region builds then publishes. How do we organize those tasks?",
     teach: "Bundle related tasks into one readable, reusable unit.",
     points: [
@@ -832,12 +900,12 @@ sales_report()
 `,
   },
 
-  // 15 ───────────────────────────────────────────────────────────────────────
+  // 17 ───────────────────────────────────────────────────────────────────────
   {
     id: "deferrable",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 15: Wait without wasting a worker",
+    title: "Step 17: Wait without wasting a worker",
     prompt: "Reports should wait for market close. How do we wait efficiently?",
     teach: "Deferrable sensors wait via the triggerer, freeing the worker slot.",
     points: [
@@ -903,18 +971,44 @@ sales_report()
   // L2.1 ──────────────────────────────────────────────────────────────────────
   {
     id: "bp_problem",
-    kind: "code",
+    kind: "bug",
     level: 2,
-    file: "dags/customers.py",
+    file: "dags/orders.py",
     title: "Step 1: The problem",
-    prompt: "50 analysts each copy this DAG for their table. What goes wrong?",
+    prompt:
+      "50 analysts hand-copy this DAG and it has drifted. Tap the line that " +
+      "hardcodes config it should read from a Variable.",
     teach: "Copy-pasted DAGs drift and cannot be validated.",
     points: [
-      "Copy-pasted DAGs drift: orders.py lost retries and hardcoded the URL.",
+      "Copy-pasted DAGs drift: this one hardcoded the URL and dropped retries.",
       "Nothing validates the config, a typo ships straight to production.",
       "50 near-identical files are impossible to keep consistent.",
       "Blueprint: one tested template, pipelines become small YAML.",
     ],
+    bugLine: 13,
+    code: `from datetime import datetime
+
+from airflow.sdk import dag, task
+
+
+@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
+def orders():
+
+    @task
+    def extract():
+        import requests
+
+        return requests.get("https://api.example.com/orders").json()
+
+    @task
+    def load(rows):
+        print(f"Loading {len(rows)} orders")
+
+    load(extract())
+
+
+orders()
+`,
     preload: {
       "dags/customers.py": `from datetime import datetime
 
@@ -940,39 +1034,7 @@ def customers():
 
 customers()
 `,
-      "dags/orders.py": `from datetime import datetime
-
-from airflow.sdk import dag, task
-
-
-@dag(schedule="@daily", start_date=datetime(2026, 1, 1))
-def orders():
-
-    @task
-    def extract():
-        import requests
-
-        # drifted: hardcoded URL and no retries
-        return requests.get("https://api.example.com/orders").json()
-
-    @task
-    def load(rows):
-        print(f"Loading {len(rows)} orders")
-
-    load(extract())
-
-
-orders()
-`,
     },
-    options: [
-      { id: "a", label: "They drift and can't be validated", correct: true,
-        code: "# orders.py: no retries, hardcoded URL" },
-      { id: "b", label: "Nothing, copy-paste is fine",
-        code: "# cp customers.py orders.py" },
-      { id: "c", label: "Add a linter and hope",
-        code: "# pre-commit + good intentions" },
-    ],
   },
 
   // L2.2 ──────────────────────────────────────────────────────────────────────

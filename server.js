@@ -52,19 +52,35 @@ function levelInfo(s) {
 const correctOption = () => currentStep()?.options.find((o) => o.correct);
 const playerList = () => Object.values(players).filter((p) => p.name);
 
+// Fixed options for a "review" (PR) round.
+const REVIEW_OPTIONS = [
+  { id: "approve", label: "Approve" },
+  { id: "request", label: "Request changes" },
+];
+// The id of the correct answer for any round kind: a line ("L7") for "bug",
+// the verdict for "review", otherwise the flagged option.
+function correctAnswerId(s) {
+  if (!s) return null;
+  if (s.kind === "bug") return "L" + s.bugLine;
+  if (s.kind === "review") return s.verdict;
+  return s.options?.find((o) => o.correct)?.id ?? null;
+}
+// Streak -> score multiplier (caps at 3x).
+const multiplierFor = (streak) => Math.min(Math.max(streak, 1), 3);
+
 function leaderboard() {
   return playerList()
     .sort((a, b) => b.score - a.score)
     .slice(0, 10)
-    .map((p) => ({ name: p.name, score: p.score }));
+    .map((p) => ({ name: p.name, score: p.score, streak: p.streak || 0 }));
 }
 
 function publicStep() {
   const s = currentStep();
   if (!s) return null;
-  // NOTE: explanation content (teach/points) is intentionally NOT included here
-  // so it can't leak to players during voting; it ships only post-vote below.
-  return {
+  // NOTE: the correct answer (correctId / bugLine / verdict) and the explanation
+  // (teach/points) are NOT included here so they can't leak during voting.
+  const base = {
     index: state.stepIndex,
     total: steps.length,
     title: s.title,
@@ -72,8 +88,18 @@ function publicStep() {
     kind: s.kind || "code",
     explainFirst: !!s.explainFirst,
     ...levelInfo(s),
-    options: s.options.map((o) => ({ id: o.id, label: o.label, code: o.code })),
   };
+  if (s.kind === "bug") {
+    // The buggy code IS the puzzle; players tap a line. bugLine ships on reveal.
+    base.code = s.code;
+    base.lineCount = s.code.split("\n").length;
+  } else if (s.kind === "review") {
+    base.diff = s.diff; // the PR; players Approve / Request changes
+    base.options = REVIEW_OPTIONS;
+  } else {
+    base.options = s.options.map((o) => ({ id: o.id, label: o.label, code: o.code }));
+  }
+  return base;
 }
 
 function fullState() {
@@ -89,9 +115,11 @@ function fullState() {
     step: publicStep(),
     votes: state.votes,
     totalVotes: Object.values(state.votes).reduce((a, b) => a + b, 0),
-    correctId: postVote ? correctOption()?.id : null,
+    correctId: postVote ? correctAnswerId(s) : null,
     teach: slide ? s?.teach : null,
     points: slide ? s?.points || [] : null,
+    // "Predict & run": the run output is the dramatic post-vote reveal.
+    runOutput: postVote && s?.kind === "predict_run" ? s.runOutput || [] : null,
     // Per-file committed code (one tab each on the Stage) and the file the
     // current step is building (the editor auto-focuses it).
     files: state.committed,
@@ -112,10 +140,17 @@ function goToStep(i) {
   state.phase = steps[i].explainFirst ? "teaching" : "voting";
   state.votes = {};
   state.voters = {};
-  for (const o of steps[i].options) state.votes[o.id] = 0;
+  const cs = steps[i];
+  if (cs.kind === "review") state.votes = { approve: 0, request: 0 };
+  else if (cs.kind !== "bug" && cs.options) for (const o of cs.options) state.votes[o.id] = 0;
+  // "bug" rounds tally line votes ("L7") as they arrive (no preset keys).
   // Crossing into a new level starts the editor on a fresh slate; the Stage
   // plays the door animation to cover the swap.
   if (prev && levelOf(steps[i]) !== levelOf(prev)) state.committed = {};
+  // Drop an ephemeral bug round's throwaway file so it doesn't linger as a tab.
+  if (prev && prev.kind === "bug" && prev.ephemeral) delete state.committed[fileOf(prev)];
+  // "bug" rounds show their buggy code in the editor (players tap a line).
+  if (cs.kind === "bug") state.committed[fileOf(cs)] = cs.code;
   // Preload reference files for this step (e.g. the "before" DAGs), so they show
   // during voting, before any code is committed.
   if (steps[i].preload) {
@@ -136,6 +171,7 @@ io.on("connection", (socket) => {
     players[socket.id] = {
       name: String(name || "Player").trim().slice(0, 24) || "Player",
       score: 0,
+      streak: 0,
     };
     socket.emit("joined", { id: socket.id, score: 0 });
     broadcast();
@@ -144,7 +180,17 @@ io.on("connection", (socket) => {
   socket.on("vote", ({ optionId }) => {
     const p = players[socket.id];
     if (!p || state.phase !== "voting") return;
-    if (!currentStep().options.some((o) => o.id === optionId)) return;
+    const s = currentStep();
+    let valid;
+    if (s.kind === "bug") {
+      const m = /^L(\d+)$/.exec(optionId);
+      valid = !!m && +m[1] >= 1 && +m[1] <= s.code.split("\n").length;
+    } else if (s.kind === "review") {
+      valid = optionId === "approve" || optionId === "request";
+    } else {
+      valid = s.options.some((o) => o.id === optionId);
+    }
+    if (!valid) return;
 
     const prev = state.voters[socket.id];
     if (prev === optionId) return;
@@ -174,19 +220,34 @@ io.on("connection", (socket) => {
   socket.on("reveal", () => {
     if (state.phase !== "voting") return;
     state.phase = "revealed";
-    const correct = correctOption();
+    const s = currentStep();
+    const correct = correctAnswerId(s);
     for (const [sid, opt] of Object.entries(state.voters)) {
-      const got = opt === correct.id;
-      if (got && players[sid]) players[sid].score += 100;
+      const p = players[sid];
+      if (!p) continue;
+      const got = opt === correct;
+      let gained = 0;
+      let mult = 0;
+      if (got) {
+        // Streak multiplier: each consecutive correct answer is worth more.
+        p.streak = (p.streak || 0) + 1;
+        mult = multiplierFor(p.streak);
+        gained = 100 * mult;
+        p.score += gained;
+      } else {
+        p.streak = 0; // a wrong answer breaks the combo
+      }
       io.to(sid).emit("result", {
         correct: got,
-        correctId: correct.id,
-        score: players[sid] ? players[sid].score : 0,
+        correctId: correct,
+        gained,
+        multiplier: mult,
+        streak: p.streak,
+        score: p.score,
       });
     }
     // Commit the best-practice snippet into this step's file at reveal time, so
     // the code appears as the result is shown (not later on Next).
-    const s = currentStep();
     if (s.snapshot !== undefined) state.committed[fileOf(s)] = s.snapshot;
     // Seed any additional files (e.g. the downstream DAG) the first time only.
     if (s.seed) {
@@ -221,7 +282,10 @@ io.on("connection", (socket) => {
     state.votes = {};
     state.voters = {};
     state.committed = {};
-    for (const id in players) players[id].score = 0;
+    for (const id in players) {
+      players[id].score = 0;
+      players[id].streak = 0;
+    }
     broadcast();
   });
 

@@ -94,42 +94,64 @@ function setWaitScore() {
   }
 }
 
+function classNames(...c) { return c.filter(Boolean).join(" "); }
+
 function renderVote() {
   if (!cur || !cur.step) return;
-  el("p-title").textContent = cur.step.title;
-  el("p-prompt").textContent = cur.step.prompt;
+  const st = cur.step;
+  el("p-title").textContent = st.title;
+  el("p-prompt").textContent = st.prompt;
   el("p-score").textContent = myScore > 0 ? `Score: ${myScore}` : "";
-
   const revealed = cur.phase === "revealed" || cur.phase === "explaining";
-  el("p-options").innerHTML = cur.step.options
-    .map((o) => {
-      const picked = myVote === o.id;
-      const correct = revealed && o.id === cur.correctId;
-      const wrong = revealed && picked && !correct;
-      const cls = ["p-opt", picked ? "picked" : "", correct ? "correct" : "", wrong ? "wrong" : ""]
-        .filter(Boolean)
-        .join(" ");
-      return `<button class="${cls}" data-opt="${o.id}" ${revealed ? "disabled" : ""}>
-        ${escapeHtml(o.label)}<span class="p-code mono">${escapeHtml(o.code)}</span>
-      </button>`;
-    })
-    .join("");
+  const wrap = el("p-options");
+  const dis = revealed ? "disabled" : "";
 
-  el("p-options")
-    .querySelectorAll("button")
-    .forEach((b) =>
-      b.addEventListener("click", () => socket.emit("vote", { optionId: b.dataset.opt }))
-    );
+  if (st.kind === "bug") {
+    // Spot the bug: tap the broken line.
+    wrap.innerHTML = (st.code || "").split("\n").map((ln, i) => {
+      const id = "L" + (i + 1);
+      const picked = myVote === id, correct = revealed && id === cur.correctId;
+      const cls = classNames("p-line", picked && "picked", correct && "correct", revealed && picked && !correct && "wrong");
+      return `<button class="${cls}" data-opt="${id}" ${dis}><span class="p-ln">${i + 1}</span><span class="p-code mono">${escapeHtml(ln || " ")}</span></button>`;
+    }).join("");
+  } else if (st.kind === "review") {
+    // You're the reviewer: read the diff, then Approve / Request changes.
+    const diff = (st.diff || "").split("\n").map((ln) => {
+      const c = ln.startsWith("+") ? "diff-add" : ln.startsWith("-") ? "diff-del" : "diff-ctx";
+      return `<div class="p-diff-line ${c} mono">${escapeHtml(ln || " ")}</div>`;
+    }).join("");
+    const btns = (st.options || []).map((o) => {
+      const picked = myVote === o.id, correct = revealed && o.id === cur.correctId;
+      const cls = classNames("p-opt", "p-review-btn", picked && "picked", correct && "correct", revealed && picked && !correct && "wrong");
+      return `<button class="${cls}" data-opt="${o.id}" ${dis}>${escapeHtml(o.label)}</button>`;
+    }).join("");
+    wrap.innerHTML = `<div class="p-diff">${diff}</div>${btns}`;
+  } else {
+    // Standard options (code / predict / predict_run).
+    wrap.innerHTML = (st.options || []).map((o) => {
+      const picked = myVote === o.id, correct = revealed && o.id === cur.correctId;
+      const cls = classNames("p-opt", picked && "picked", correct && "correct", revealed && picked && !correct && "wrong");
+      const code = o.code ? `<span class="p-code mono">${escapeHtml(o.code)}</span>` : "";
+      return `<button class="${cls}" data-opt="${o.id}" ${dis}>${escapeHtml(o.label)}${code}</button>`;
+    }).join("");
+  }
+
+  wrap.querySelectorAll("button").forEach((b) =>
+    b.addEventListener("click", () => socket.emit("vote", { optionId: b.dataset.opt }))
+  );
 
   const status = el("p-status");
   if (revealed && lastResult) {
     status.classList.remove("hidden");
-    status.innerHTML = lastResult.correct
-      ? '<span class="result-good">Best practice! +100</span>'
-      : '<span class="result-bad">Not the best practice, see the highlighted answer</span>';
+    if (lastResult.correct) {
+      const combo = lastResult.multiplier > 1 ? ` · 🔥 ${lastResult.multiplier}× (streak ${lastResult.streak})` : "";
+      status.innerHTML = `<span class="result-good">Correct! +${lastResult.gained}${combo}</span>`;
+    } else {
+      status.innerHTML = '<span class="result-bad">Not quite, see the highlighted answer</span>';
+    }
   } else if (revealed && !myVote) {
     status.classList.remove("hidden");
-    status.textContent = "Round over, vote next time!";
+    status.textContent = "Round over, jump in next time!";
   } else if (myVote) {
     status.classList.remove("hidden");
     status.textContent = "Locked in (tap another to change)";
