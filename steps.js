@@ -900,6 +900,8 @@ orders()
     kind: "code",
     level: 2,
     explainFirst: true,
+    // The answer is the whole class, so don't show it on the teaching slide.
+    hideTeachCode: true,
     file: "dags/templates/blueprints.py",
     title: "Step 2: Define a Blueprint",
     prompt: "How do we capture the extract -> load pattern once, for everyone?",
@@ -1144,5 +1146,64 @@ steps:
 
 build_all_dags()
 `,
+  },
+
+  // L2.8 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "bp_vs_dagfactory",
+    kind: "predict",
+    level: 2,
+    explainFirst: true,
+    file: "dags/dag_factory.yaml",
+    title: "Step 8: Blueprint vs DAG Factory",
+    prompt:
+      "DAG Factory also builds DAGs from YAML. Compare the two tabs, how is Blueprint different?",
+    teach:
+      "DAG Factory exposes Airflow's full API in YAML; Blueprint hides it behind validated templates.",
+    points: [
+      "DAG Factory: the YAML names operators and callable paths, author must know Airflow.",
+      "Blueprint: the YAML just picks a `blueprint` and fills in business config.",
+      "Blueprint validates config up front with Pydantic; DAG Factory leaves more open.",
+      "DAG Factory for maximum flexibility, Blueprint for guardrails and consistency.",
+    ],
+    // Preload the DAG Factory version of the SAME pipeline, so the Stage can flip
+    // between dag_factory.yaml (verbose, raw Airflow) and sales.dag.yaml (Blueprint).
+    preload: {
+      "dags/dag_factory.yaml": `sales:
+  default_args:
+    owner: data-team
+    retries: 3
+  schedule_interval: "@daily"
+  tasks:
+    extract_customers:
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: extract
+      python_callable_file: /opt/airflow/dags/etl/ingest.py
+      op_kwargs: { source: customers }
+    load_customers:
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: load
+      python_callable_file: /opt/airflow/dags/etl/ingest.py
+      dependencies: [extract_customers]
+    extract_orders:
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: extract
+      python_callable_file: /opt/airflow/dags/etl/ingest.py
+      op_kwargs: { source: orders }
+    load_orders:
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: load
+      python_callable_file: /opt/airflow/dags/etl/ingest.py
+      dependencies: [extract_orders]
+`,
+    },
+    options: [
+      { id: "a", label: "Validated templates that hide Airflow's API", correct: true,
+        code: "# blueprint: ingest  (a validated template, not raw operators)" },
+      { id: "b", label: "It exposes Airflow's full API in YAML",
+        code: "# that's DAG Factory's approach, not Blueprint" },
+      { id: "c", label: "It's DAG Factory with a new name",
+        code: "# they take opposite approaches" },
+    ],
   },
 ];

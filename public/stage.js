@@ -26,6 +26,7 @@ const FILE_ORDER = [
   "dags/orders.py",
   "dags/templates/blueprints.py",
   "dags/sales.dag.yaml",
+  "dags/dag_factory.yaml",
   "dags/marketing.dag.yaml",
   "dags/loader.py",
 ];
