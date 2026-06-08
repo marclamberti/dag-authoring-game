@@ -276,9 +276,9 @@ function renderExplain() {
     .join("");
 
   const snippet = el("explain-snippet");
-  // Post-vote: the correct option's code. Pre-vote teaching slide: the snippet
-  // the server sends so the lesson shows real code before the vote.
-  const code = correctCode() || cur.teachCode || "";
+  // Only the post-vote explanation shows the snippet (correctId is set once
+  // revealed); the pre-vote teaching slide never shows the answer code.
+  const code = correctCode();
   if (code) {
     const codeEl = el("explain-code");
     codeEl.textContent = code;

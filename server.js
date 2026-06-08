@@ -92,11 +92,6 @@ function fullState() {
     correctId: postVote ? correctOption()?.id : null,
     teach: slide ? s?.teach : null,
     points: slide ? s?.points || [] : null,
-    // During the pre-vote teaching slide (explain-first steps), show the snippet
-    // being introduced so the vote is grounded, unless the step opts out (when
-    // the snippet would just give the answer away).
-    teachCode:
-      state.phase === "teaching" && !s?.hideTeachCode ? correctOption()?.code || "" : null,
     // Per-file committed code (one tab each on the Stage) and the file the
     // current step is building (the editor auto-focuses it).
     files: state.committed,

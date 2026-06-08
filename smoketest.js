@@ -84,14 +84,12 @@ function assert(cond, msg) {
   let levelResetClearedL1 = false;
   let preloadedBefore = false;
   let explainFirstTaught = false;
-  let teachShowedCode = false;
   while (true) {
     const idx = s.step.index;
     // Explain-first steps open on the teaching slide; open the vote first.
     if (STEPS[idx].explainFirst) {
       assert(s.phase === "teaching", `step ${idx + 1} opens in teaching (explain-first)`);
       explainFirstTaught = true;
-      if (typeof s.teachCode === "string" && s.teachCode.length > 0) teachShowedCode = true;
       const v = next(stage, "state");
       stage.emit("startVote");
       s = await v;
@@ -130,7 +128,6 @@ function assert(cond, msg) {
   assert(levelResetClearedL1, "entering Level 2 clears the Level 1 files (fresh slate)");
   assert(preloadedBefore, "Level 2 preloads the 'before' DAGs (customers.py + orders.py)");
   assert(explainFirstTaught, "Level 2 build steps open on the teaching slide before the vote");
-  assert(teachShowedCode, "the teaching slide shows the code snippet before the vote");
   assert(s.phase === "finished", "session finishes after the last step");
   assert(
     s.files["dags/templates/blueprints.py"] &&

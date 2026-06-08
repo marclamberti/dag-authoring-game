@@ -900,8 +900,6 @@ orders()
     kind: "code",
     level: 2,
     explainFirst: true,
-    // The answer is the whole class, so don't show it on the teaching slide.
-    hideTeachCode: true,
     file: "dags/templates/blueprints.py",
     title: "Step 2: Define a Blueprint",
     prompt: "How do we capture the extract -> load pattern once, for everyone?",
