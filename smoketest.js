@@ -104,8 +104,9 @@ function assert(cond, msg) {
     if (STEPS[idx].snapshot !== undefined && s.files[f] !== STEPS[idx].snapshot) {
       assert(false, `step ${idx + 1} committed into ${f}`);
     }
-    if (idx === 10 && s.files["dags/sales_report.py"]) seededReport = true;
-    if (idx >= 11 && lvl(idx) === 1 && s.activeFile === "dags/sales_report.py") builtReport = true;
+    if (STEPS[idx].id === "event_driven" && s.files["dags/sales_report.py"]) seededReport = true;
+    if (STEPS[idx].file === "dags/sales_report.py" && s.activeFile === "dags/sales_report.py")
+      builtReport = true;
     // First step of Level 2: L1 files cleared (fresh slate) + "before" DAGs preloaded.
     if (lvl(idx) === 2 && idx > 0 && lvl(idx - 1) === 1) {
       levelResetClearedL1 = !s.files["dags/sales_pipeline.py"];

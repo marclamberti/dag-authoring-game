@@ -150,9 +150,60 @@ sales_pipeline()
 
   // 4 ────────────────────────────────────────────────────────────────────────
   {
+    id: "dag_params",
+    kind: "code",
+    title: "Step 4: Settings every DAG should have",
+    prompt: "Beyond schedule and start_date, what should every DAG set?",
+    teach: "Every DAG should set docs, tags, a run timeout, and a failure circuit-breaker.",
+    points: [
+      "doc_md: documentation shown right on the DAG in the UI.",
+      "tags: group and filter DAGs in a crowded UI.",
+      "dagrun_timeout: kill a DAG run that hangs instead of running forever.",
+      "max_consecutive_failed_dag_runs: auto-pause the DAG after N straight failures.",
+    ],
+    options: [
+      { id: "a", label: "doc_md, tags, dagrun_timeout, max_consecutive_failed_dag_runs", correct: true,
+        code:
+          "dagrun_timeout=timedelta(hours=2),\n" +
+          "max_consecutive_failed_dag_runs=3,\n" +
+          'tags=["sales", "etl"],\n' +
+          'doc_md="..."' },
+      { id: "b", label: "leave the defaults",
+        code: "# nothing extra" },
+      { id: "c", label: "just tags",
+        code: 'tags=["sales"]' },
+    ],
+    snapshot: `from datetime import datetime, timedelta
+
+from airflow.sdk import dag, task
+from airflow.timetables.trigger import MultipleCronTriggerTimetable
+
+
+@dag(
+    schedule=MultipleCronTriggerTimetable(
+        "0 9 * * 1-5",
+        "0 17 * * 1-5",
+        timezone="UTC",
+    ),
+    start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
+)
+def sales_pipeline():
+    pass
+
+
+sales_pipeline()
+`,
+  },
+
+  // 5 ────────────────────────────────────────────────────────────────────────
+  {
     id: "first_task",
     kind: "code",
-    title: "Step 4: Define the first task",
+    title: "Step 5: Define the first task",
     prompt: "How do we define our first task, get_date?",
     teach: "@task turns a plain function into a task, no operator boilerplate.",
     points: [
@@ -166,7 +217,7 @@ sales_pipeline()
       { id: "b", label: "PythonOperator(python_callable=...)",
         code: 'get_date = PythonOperator(task_id="get_date", python_callable=_get_date)' },
     ],
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import dag, task
 from airflow.timetables.trigger import MultipleCronTriggerTimetable
@@ -179,6 +230,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -193,11 +248,11 @@ sales_pipeline()
 `,
   },
 
-  // 5 ────────────────────────────────────────────────────────────────────────
+  // 6 ────────────────────────────────────────────────────────────────────────
   {
     id: "idempotency",
     kind: "code",
-    title: "Step 5: Make the first task idempotent",
+    title: "Step 6: Make the first task idempotent",
     prompt: "get_date returns the run's date. What should it return?",
     teach: "Return the run logical date (ds), not the wall clock.",
     points: [
@@ -214,7 +269,7 @@ sales_pipeline()
       { id: "c", label: "date.today()",
         code: "@task\ndef get_date():\n    return date.today()" },
     ],
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import dag, task
 from airflow.timetables.trigger import MultipleCronTriggerTimetable
@@ -227,6 +282,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -241,11 +300,11 @@ sales_pipeline()
 `,
   },
 
-  // 6 ────────────────────────────────────────────────────────────────────────
+  // 7 ────────────────────────────────────────────────────────────────────────
   {
     id: "variable",
     kind: "code",
-    title: "Step 6: Read the API URL from a Variable",
+    title: "Step 7: Read the API URL from a Variable",
     prompt: "The API URL lives in an Airflow Variable. Where do we fetch it?",
     teach: "Read the Variable inside the task, not at the top of the file.",
     points: [
@@ -263,7 +322,7 @@ sales_pipeline()
       { id: "b", label: "at the top of the file",
         code: 'api_url = Variable.get("sales_api_url")' },
     ],
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Variable, dag, task
 from airflow.timetables.trigger import MultipleCronTriggerTimetable
@@ -276,6 +335,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -297,11 +360,11 @@ sales_pipeline()
 `,
   },
 
-  // 7 ────────────────────────────────────────────────────────────────────────
+  // 8 ────────────────────────────────────────────────────────────────────────
   {
     id: "pass_data",
     kind: "code",
-    title: "Step 7: Pass data downstream",
+    title: "Step 8: Pass data downstream",
     prompt: "Pass each task's output to the next (date → extract → transform). How?",
     teach: "Pass data with return values (XCom), not globals or files.",
     points: [
@@ -317,7 +380,7 @@ sales_pipeline()
       { id: "c", label: "write to /tmp and read it back",
         code: 'open("/tmp/raw.json", "w").write(...)' },
     ],
-    snapshot: `from datetime import datetime
+    snapshot: `from datetime import datetime, timedelta
 
 from airflow.sdk import Variable, dag, task
 from airflow.timetables.trigger import MultipleCronTriggerTimetable
@@ -330,6 +393,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -355,11 +422,11 @@ sales_pipeline()
 `,
   },
 
-  // 8 ────────────────────────────────────────────────────────────────────────
+  // 9 ────────────────────────────────────────────────────────────────────────
   {
     id: "resilience",
     kind: "code",
-    title: "Step 8: Make load resilient",
+    title: "Step 9: Make load resilient",
     prompt: "load hits a flaky warehouse. How do we configure it for production?",
     teach: "Production tasks need retries, backoff, and a timeout.",
     points: [
@@ -395,6 +462,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -429,11 +500,11 @@ sales_pipeline()
 `,
   },
 
-  // 9 ────────────────────────────────────────────────────────────────────────
+  // 10 ────────────────────────────────────────────────────────────────────────
   {
     id: "dependencies",
     kind: "code",
-    title: "Step 9: Wire the dependencies",
+    title: "Step 10: Wire the dependencies",
     prompt: "How do we connect get_date → extract → transform → load?",
     teach: "Call the tasks and TaskFlow wires the dependencies for you.",
     points: [
@@ -462,6 +533,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -496,11 +571,11 @@ sales_pipeline()
 `,
   },
 
-  // 10 ───────────────────────────────────────────────────────────────────────
+  // 11 ───────────────────────────────────────────────────────────────────────
   {
     id: "versioning",
     kind: "predict",
-    title: "Step 10: DAG Versioning (predict!)",
+    title: "Step 11: DAG Versioning (predict!)",
     prompt:
       "You tweak transform and redeploy WHILE a run is in progress. " +
       "Which code does that in-flight run finish with?",
@@ -530,6 +605,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -565,11 +644,11 @@ sales_pipeline()
 `,
   },
 
-  // 11 ───────────────────────────────────────────────────────────────────────
+  // 12 ───────────────────────────────────────────────────────────────────────
   {
     id: "event_driven",
     kind: "code",
-    title: "Step 11: Trigger a downstream DAG",
+    title: "Step 12: Trigger a downstream DAG",
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
@@ -619,8 +698,10 @@ from airflow.timetables.trigger import MultipleCronTriggerTimetable
         timezone="UTC",
     ),
     start_date=datetime(2026, 1, 1),
-    tags=["best-practices", "webinar"],
-    doc_md="### Sales pipeline\\nBuilt live by the audience",
+    dagrun_timeout=timedelta(hours=2),
+    max_consecutive_failed_dag_runs=3,
+    tags=["sales", "etl"],
+    doc_md="Sales pipeline: ingest sources on a schedule.",
 )
 def sales_pipeline():
 
@@ -657,12 +738,12 @@ sales_pipeline()
 `,
   },
 
-  // 12 ───────────────────────────────────────────────────────────────────────
+  // 13 ───────────────────────────────────────────────────────────────────────
   {
     id: "dynamic_mapping",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 12: Build one report per region",
+    title: "Step 13: Build one report per region",
     prompt: "We need a report for each region. How do we create the tasks?",
     teach: "One task per input at runtime with .expand(), not a loop.",
     points: [
@@ -700,12 +781,12 @@ sales_report()
 `,
   },
 
-  // 13 ───────────────────────────────────────────────────────────────────────
+  // 14 ───────────────────────────────────────────────────────────────────────
   {
     id: "task_groups",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 13: Group related tasks",
+    title: "Step 14: Group related tasks",
     prompt: "Each region builds then publishes. How do we organize those tasks?",
     teach: "Bundle related tasks into one readable, reusable unit.",
     points: [
@@ -751,12 +832,12 @@ sales_report()
 `,
   },
 
-  // 14 ───────────────────────────────────────────────────────────────────────
+  // 15 ───────────────────────────────────────────────────────────────────────
   {
     id: "deferrable",
     kind: "code",
     file: "dags/sales_report.py",
-    title: "Step 14: Wait without wasting a worker",
+    title: "Step 15: Wait without wasting a worker",
     prompt: "Reports should wait for market close. How do we wait efficiently?",
     teach: "Deferrable sensors wait via the triggerer, freeing the worker slot.",
     points: [

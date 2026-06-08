@@ -37,14 +37,16 @@ Then open:
 
 Drive the session from the Stage:
 
-1. **Start ▶**, opens the first vote.
-2. Audience votes; the bar fills live.
-3. **Reveal results 👀**, locks votes, shows the split, highlights the
-   best-practice option, scores correct voters, and shows the "why".
-4. **Commit & Next →**, types the best-practice snippet into the editor and
-   moves to the next decision.
+1. **Start** opens the first round.
+2. Audience votes; the bar fills live. (Explain-first steps open on a teaching
+   slide first; click **Start vote** when ready.)
+3. **Reveal results** locks votes, shows the split, highlights the best-practice
+   option, scores correct voters, and types the snippet into the editor.
+4. **Show explanation** turns the right panel into a slide (why + takeaways);
+   then **Next step** moves on. (Explain-first steps skip straight to Next.)
 
-`Reset` clears the editor and all scores back to the lobby.
+`Reset` clears the editor and all scores back to the lobby. Crossing into a new
+level plays a door transition and starts the editor fresh (scores carry over).
 
 ### Running it for a real (remote) audience
 
@@ -67,20 +69,21 @@ editor on a fresh slate (scores carry over). The arc:
 1. Instantiate the DAG (`@dag` decorator)
 2. Schedule on multiple crons (`MultipleCronTriggerTimetable`, e.g. 9am & 5pm weekdays)
 3. `start_date` (static datetime, not `datetime.now()`; Airflow 3 defaults `catchup=False`)
-4. Define the first task (`@task` vs `PythonOperator`)
-5. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
-6. No top-level code (read the API URL from a `Variable` inside the task)
-7. Pass data downstream (date → extract → transform via XCom)
-8. Make `load` resilient (`retries`, `retry_delay`, exponential backoff, `execution_timeout`)
-9. Wire dependencies the TaskFlow way
-10. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
-11. **Trigger a downstream DAG**, emit an `Asset` outlet; a second tab seeds the consumer DAG
+4. Settings every DAG should have (`doc_md`, `tags`, `dagrun_timeout`, `max_consecutive_failed_dag_runs`)
+5. Define the first task (`@task` vs `PythonOperator`)
+6. Idempotency: `get_date` returns the injected `ds`, not `datetime.now()`
+7. No top-level code (read the API URL from a `Variable` inside the task)
+8. Pass data downstream (date → extract → transform via XCom)
+9. Make `load` resilient (`retries`, `retry_delay`, exponential backoff, `execution_timeout`)
+10. Wire dependencies the TaskFlow way
+11. **DAG versioning**, predict-then-reveal (Airflow 3 spotlight)
+12. **Trigger a downstream DAG**, emit an `Asset` outlet; a second tab seeds the consumer DAG
 
 **`dags/sales_report.py`** (the downstream DAG)
 
-12. **Dynamic task mapping** (`.expand()`), one report per region instead of a loop
-13. **Task groups** (`@task_group`), readable, modular, reusable, mappable
-14. **Deferrable mode** (`deferrable=True`), wait via the triggerer without holding a slot
+13. **Dynamic task mapping** (`.expand()`), one report per region instead of a loop
+14. **Task groups** (`@task_group`), readable, modular, reusable, mappable
+15. **Deferrable mode** (`deferrable=True`), wait via the triggerer without holding a slot
 
 ## Level 2, Blueprint (from copy-pasted DAGs to validated templates)
 
@@ -104,16 +107,22 @@ Each step is one object in `steps.js`:
 
 ```js
 {
-  id: "schedule",
-  kind: "code",                 // "code" advances the editor; "predict" is a knowledge round
-  title: "Step 2: Schedule it",
-  prompt: "This is a plain daily batch. How do we schedule it?",
-  teach: "Why @daily wins …",   // shown on Reveal
+  id: "idempotency",
+  kind: "code",            // "code" advances the editor; "predict" is a knowledge round
+  level: 1,               // optional (default 1); a new level triggers the door transition
+  file: "dags/sales_pipeline.py", // optional (default); which editor tab this step builds
+  explainFirst: true,     // optional; open on the teaching slide before the vote
+  title: "Step 6: Make the first task idempotent",
+  prompt: "get_date returns the run's date. What should it return?",
+  teach: "Return the run logical date (ds), not the wall clock.", // one-line slide headline
+  points: ["…bullet takeaways shown on the explanation slide…"],
   options: [
-    { id: "a", label: 'schedule="@daily"', correct: true, code: '@dag(schedule="@daily")' },
-    { id: "b", label: "schedule_interval=…",                code: "…" },
+    { id: "a", label: "ds parameter", correct: true, code: "@task\ndef get_date(ds=None):\n    return ds" },
+    { id: "b", label: "datetime.now().date()", code: "…" },
   ],
-  snapshot: `…full file after this step…`, // committed into the editor on "Next"
+  // snapshot: committed into the editor at Reveal. A step may also `preload`/`seed`
+  // other files (reference tabs). Omit snapshot for a pure knowledge round.
+  snapshot: `…full file after this step…`,
 }
 ```
 
