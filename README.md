@@ -50,10 +50,29 @@ level plays a door transition and starts the editor fresh (scores carry over).
 
 ### Running it for a real (remote) audience
 
-`localhost` only works on your machine. For a live webinar, deploy the app
-somewhere public (Render, Railway, Fly.io, a small VM, anything that runs Node
-and allows WebSockets) and the QR/URL on the Stage will automatically point at
-that host. On the same LAN you can instead share `http://<your-LAN-IP>:3000/`.
+`localhost` only works on your machine. The QR/URL on the Stage always points at
+whatever host it's served from, so deploying needs no code change. It's a
+stateful Socket.IO server with the game in memory, so host it as **one instance**
+on a **persistent Node process** (not serverless, not autoscaled).
+
+**Deploy to Render (one click)** — a [`render.yaml`](./render.yaml) Blueprint is
+included:
+
+1. Push this repo to GitHub (done).
+2. [render.com](https://render.com) → **New → Blueprint** → pick the repo →
+   **Apply**. It runs `npm install` / `npm start` and gives you an HTTPS URL.
+3. Share `https://<your-app>.onrender.com/stage` on screen; the QR sends the
+   audience to `/`.
+
+The free tier **sleeps after ~15 min idle** (cold start ~30s) — open the URL a
+few minutes before you go live, or switch the `plan` in `render.yaml` to
+`starter` to keep it warm. Railway and Fly.io work the same way (Fly needs a
+Dockerfile).
+
+**Quickest, no deploy** — run locally and expose a public HTTPS tunnel for a
+one-off session: `npm start`, then `npx cloudflared tunnel --url http://localhost:3000`.
+
+On the same LAN you can also just share `http://<your-LAN-IP>:3000/`.
 
 ## The build-script (what gets voted on)
 

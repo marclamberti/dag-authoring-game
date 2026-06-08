@@ -287,7 +287,7 @@ sales_pipeline()
     ephemeral: true,
     file: "dags/daily_export.py",
     title: "Step 7: Spot the bug",
-    prompt: "This DAG isn't idempotent, a backfill would use today's date, not the run's. Tap the broken line.",
+    prompt: "Find the bug...",
     teach: "Use the run's logical date (ds), not datetime.now(), so backfills are reproducible.",
     points: [
       "datetime.now() is wall-clock, so a backfill recomputes for today.",

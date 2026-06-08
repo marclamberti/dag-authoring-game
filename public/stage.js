@@ -218,7 +218,7 @@ function renderOptions() {
     const line = revealed && cur.correctId ? cur.correctId.slice(1) : null;
     wrap.innerHTML = revealed
       ? `<div class="bug-answer">🐛 The bug is on <b>line ${line}</b>, highlighted on the left.</div>`
-      : `<div class="bug-hint">Tap the broken line on your phone. <span class="opt-pct">${total} vote${total === 1 ? "" : "s"}</span></div>`;
+      : `<div class="bug-hint">Tap the broken line. <span class="opt-pct">${total} vote${total === 1 ? "" : "s"}</span></div>`;
     return;
   }
   wrap.innerHTML = cur.step.options

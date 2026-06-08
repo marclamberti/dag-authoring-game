@@ -1,0 +1,18 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+#
+# This is a stateful Socket.IO server with the game state in memory, so it must
+# run as ONE instance (no autoscaling) on a persistent web service (not serverless).
+services:
+  - type: web
+    name: dag-authoring-game
+    runtime: node
+    plan: free # free sleeps after ~15 min idle (cold start ~30s); bump to "starter" to keep warm
+    numInstances: 1 # keep at 1: one shared in-memory game session
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true # redeploy on push to the default branch
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

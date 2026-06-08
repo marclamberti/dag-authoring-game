@@ -4,6 +4,9 @@
   "private": true,
   "description": "Live crowd-built DAG game for an interactive Airflow 3 DAG-authoring webinar. The audience votes on each authoring decision and watches the DAG get written best-practice-by-best-practice on the shared screen.",
   "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
