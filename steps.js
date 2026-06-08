@@ -35,9 +35,7 @@ module.exports = [
     kind: "code",
     title: "Step 1: Instantiate the DAG",
     prompt: "How should we create the DAG object?",
-    teach:
-      "The @dag decorator (TaskFlow) is the modern, recommended way in Airflow 3: " +
-      "less boilerplate, tasks defined as plain Python, and clean dependency wiring.",
+    teach: "@dag is the modern TaskFlow way to define a DAG, with less boilerplate.",
     points: [
       "@dag turns a plain function into a DAG, the modern TaskFlow style.",
       "Less boilerplate than `with DAG()`, and no stray global `dag` object.",
@@ -69,12 +67,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 2: Schedule on multiple crons",
     prompt: "Run at 9am AND 5pm on weekdays. How do we schedule that?",
-    teach:
-      "Airflow 3's MultipleCronTriggerTimetable runs a DAG on several cron expressions " +
-      "at once, here 9am and 5pm on weekdays, each firing its own run with the right " +
-      "data interval. It reads clearly and, unlike a single comma-cron, scales to " +
-      "genuinely different schedules (different days, months, or timezones). Duplicating " +
-      "the DAG per time just invites drift.",
+    teach: "One DAG, several cron schedules at once, no duplication.",
     points: [
       "MultipleCronTriggerTimetable triggers on several cron expressions at once.",
       "Each cron fires its own run with the correct data interval.",
@@ -119,10 +112,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 3: Set a start_date",
     prompt: "What do we pass for start_date?",
-    teach:
-      "A STATIC start_date makes runs deterministic and reproducible. `datetime.now()` " +
-      "is the classic footgun, it moves every parse, so Airflow can never decide what to " +
-      "run. In Airflow 3 `catchup` defaults to False, so you no longer need to set it.",
+    teach: "A static start_date keeps runs reproducible; datetime.now() does not.",
     points: [
       "A static `start_date` makes runs deterministic and reproducible.",
       "`datetime.now()` shifts on every parse, Airflow can never settle.",
@@ -164,10 +154,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 4: Define the first task",
     prompt: "How do we define our first task, get_date?",
-    teach:
-      "The @task decorator keeps tasks as ordinary Python functions and lets data flow " +
-      "through return values. PythonOperator + python_callable still works, but it's more " +
-      "ceremony for the same result.",
+    teach: "@task turns a plain function into a task, no operator boilerplate.",
     points: [
       "`@task` makes a function a task; data flows through return values.",
       "No `task_id` or `python_callable` boilerplate like PythonOperator.",
@@ -212,11 +199,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 5: Make the first task idempotent",
     prompt: "get_date returns the run's date. What should it return?",
-    teach:
-      "Return Airflow's `ds` (the run's logical date / data interval), not the wall " +
-      "clock. Declare `ds` as a parameter and Airflow injects it. With `datetime.now()`, " +
-      "re-running a past date fetches TODAY's data; with `ds`, a rerun recomputes for the " +
-      "exact date the run is for. That is idempotency: same run, same result, every time.",
+    teach: "Return the run logical date (ds), not the wall clock.",
     points: [
       "`ds` is the run's logical date, the data interval Airflow gives you.",
       "Declare `ds` as a task parameter and Airflow passes it in automatically.",
@@ -264,11 +247,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 6: Read the API URL from a Variable",
     prompt: "The API URL lives in an Airflow Variable. Where do we fetch it?",
-    teach:
-      "Keep config like the API URL in an Airflow Variable, not hardcoded. But " +
-      "`Variable.get()` at the top of the file runs on EVERY parse, a metadata-DB query " +
-      "each time, which slows the scheduler and hammers the database. Fetch the Variable " +
-      "INSIDE the task, so it's read once at run time.",
+    teach: "Read the Variable inside the task, not at the top of the file.",
     points: [
       "Keep config (URLs, paths) in Airflow Variables, not hardcoded.",
       "Top-level `Variable.get()` hits the metadata DB on every parse.",
@@ -324,11 +303,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 7: Pass data downstream",
     prompt: "Pass each task's output to the next (date → extract → transform). How?",
-    teach:
-      "Returning a value pushes it to XCom; taking it as an argument pulls it back. The " +
-      "date flows from get_date into extract, and extract's rows flow into transform, " +
-      "explicit, traceable, and parallel-safe. Globals and scratch files break the " +
-      "moment tasks run on different workers.",
+    teach: "Pass data with return values (XCom), not globals or files.",
     points: [
       "Return a value to push it to XCom; take an argument to pull it back.",
       "The date flows get_date → extract; the rows flow extract → transform.",
@@ -386,11 +361,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 8: Make load resilient",
     prompt: "load hits a flaky warehouse. How do we configure it for production?",
-    teach:
-      "Flaky network and warehouse calls need real resilience. `retries` re-runs a " +
-      "failed task; `retry_delay` waits between attempts; `retry_exponential_backoff` " +
-      "lengthens that wait each time instead of hammering a struggling system; and " +
-      "`execution_timeout` kills a hung task so it can never run forever and block a slot.",
+    teach: "Production tasks need retries, backoff, and a timeout.",
     points: [
       "retries: how many times Airflow re-runs a failed task.",
       "retry_delay: how long to wait between attempts (e.g. 5 minutes).",
@@ -464,10 +435,7 @@ sales_pipeline()
     kind: "code",
     title: "Step 9: Wire the dependencies",
     prompt: "How do we connect get_date → extract → transform → load?",
-    teach:
-      "With TaskFlow you just CALL the tasks: the return values create the dependencies " +
-      "automatically. Mixing in `>>` on decorated functions, or pulling XComs by hand, is " +
-      "redundant and error-prone.",
+    teach: "Call the tasks and TaskFlow wires the dependencies for you.",
     points: [
       "Calling tasks wires the dependencies automatically in TaskFlow.",
       "`load(transform(extract(get_date())))` reads like the data flow itself.",
@@ -536,10 +504,7 @@ sales_pipeline()
     prompt:
       "You tweak transform and redeploy WHILE a run is in progress. " +
       "Which code does that in-flight run finish with?",
-    teach:
-      "Airflow 3 pins each DAG run to the DAG VERSION it started on. The in-flight run " +
-      "completes on v1; new runs pick up v2, and the UI shows you exactly which run used " +
-      "which version. No more 'mystery half-old, half-new' runs.",
+    teach: "Airflow 3 pins each run to the DAG version it started on.",
     points: [
       "Airflow 3 pins each run to the DAG version it started on.",
       "In-flight runs finish on v1; new runs pick up v2.",
@@ -608,10 +573,7 @@ sales_pipeline()
     prompt:
       "A downstream DAG must run the instant clean_sales is refreshed. " +
       "How do we connect them?",
-    teach:
-      "Emit an Asset from load via `outlets=[Asset(\"clean_sales\")]`; the downstream DAG " +
-      "sets `schedule=[Asset(\"clean_sales\")]` and runs automatically when it updates. No " +
-      "sensors burning a worker, no brittle TriggerDagRunOperator timing, pure event-driven.",
+    teach: "Emit an Asset so a downstream DAG runs the moment data updates.",
     points: [
       "Emit an Asset with `outlets=[Asset(...)]` when a task updates data.",
       "Downstream DAGs `schedule=[Asset(...)]` and fire the moment it updates.",
@@ -702,10 +664,7 @@ sales_pipeline()
     file: "dags/sales_report.py",
     title: "Step 12: Build one report per region",
     prompt: "We need a report for each region. How do we create the tasks?",
-    teach:
-      "Use dynamic task mapping: `.expand()` creates one task instance per input at " +
-      "run time, so the graph scales with the data. A Python for-loop fixes the count " +
-      "at parse time, clutters the file, and can't react to runtime values.",
+    teach: "One task per input at runtime with .expand(), not a loop.",
     points: [
       "`.expand()` creates one mapped task instance per input, at run time.",
       "It scales automatically when the number of inputs changes.",
@@ -748,10 +707,7 @@ sales_report()
     file: "dags/sales_report.py",
     title: "Step 13: Group related tasks",
     prompt: "Each region builds then publishes. How do we organize those tasks?",
-    teach:
-      "Wrap related tasks in a `@task_group`. It collapses into one unit in the UI so " +
-      "big DAGs stay readable, makes the structure obvious, and is modular, you can " +
-      "import the group into other DAGs. You can even dynamically map a whole group.",
+    teach: "Bundle related tasks into one readable, reusable unit.",
     points: [
       "Task groups bundle related tasks into one collapsible unit in the UI.",
       "They keep large DAGs readable and the structure obvious.",
@@ -802,11 +758,7 @@ sales_report()
     file: "dags/sales_report.py",
     title: "Step 14: Wait without wasting a worker",
     prompt: "Reports should wait for market close. How do we wait efficiently?",
-    teach:
-      "Use a deferrable operator/sensor (`deferrable=True`). It releases the worker " +
-      "slot while waiting and resumes via the triggerer once the condition is met, so " +
-      "thousands can wait at once. Poke-mode sensors and `time.sleep()` hold a slot the " +
-      "whole time.",
+    teach: "Deferrable sensors wait via the triggerer, freeing the worker slot.",
     points: [
       "Deferrable operators release the worker slot while waiting.",
       "They resume via the triggerer when the condition is met.",
@@ -875,11 +827,7 @@ sales_report()
     file: "dags/customers.py",
     title: "Step 1: The problem",
     prompt: "50 analysts each copy this DAG for their table. What goes wrong?",
-    teach:
-      "Copy-paste doesn't scale. customers.py reads the URL from a Variable and sets " +
-      "retries; orders.py already drifted, it hardcodes the URL and dropped retries. " +
-      "Multiply by 50 and you get inconsistent, unvalidated pipelines nobody can " +
-      "maintain. Blueprint fixes this: one validated template, many tiny YAML configs.",
+    teach: "Copy-pasted DAGs drift and cannot be validated.",
     points: [
       "Copy-pasted DAGs drift: orders.py lost retries and hardcoded the URL.",
       "Nothing validates the config, a typo ships straight to production.",
@@ -955,14 +903,7 @@ orders()
     file: "dags/templates/blueprints.py",
     title: "Step 2: Define a Blueprint",
     prompt: "How do we capture the extract -> load pattern once, for everyone?",
-    teach:
-      "A blueprint is a reusable task group template for a piece of a pipeline, " +
-      "think of a cookie cutter: you design it once in Python, and everyone stamps out " +
-      "their own pipeline from it. A Blueprint has two parts: a config (the few values " +
-      "that change each time, like which table to pull) and a render method (the actual " +
-      "tasks to run). Our Ingest template runs extract then load, with the good defaults, " +
-      "retries and reading the URL from a Variable, baked in, so every pipeline made from " +
-      "it is correct by default.",
+    teach: "A Blueprint is a reusable template: a config plus the tasks to run.",
     points: [
       "Reusable task group templates composed into Airflow DAGs via YAML",
       "Part 1, the config: the few values that change each time (e.g. the table).",
@@ -1016,13 +957,7 @@ class Ingest(Blueprint[IngestConfig]):
     file: "dags/templates/blueprints.py",
     title: "Step 3: Validate the config",
     prompt: "How do we stop a typo'd or bad config from reaching production?",
-    teach:
-      "The config is just the list of values someone fills in for the template. We can " +
-      "describe each value and set rules for it, what it means, whether it's required, " +
-      "using Pydantic (Python's standard library for validated data). We also turn on " +
-      "strict mode (extra=\"forbid\"): if someone misspells a value or adds one that " +
-      "doesn't exist, Airflow stops with a clear error instead of silently ignoring it. " +
-      "Bad config is caught immediately, not at 3am in production.",
+    teach: "Validate the config with Pydantic so bad input fails fast.",
     points: [
       "The config is the handful of values someone fills in for the template.",
       "Pydantic (Python's data-validation library) describes and checks each value.",
@@ -1080,12 +1015,7 @@ class Ingest(Blueprint[IngestConfig]):
     file: "dags/sales.dag.yaml",
     title: "Step 4: Compose a DAG in YAML",
     prompt: "How does an analyst build a pipeline now? (compare with customers.py)",
-    teach:
-      "Now the payoff. Instead of writing Python, an analyst describes their pipeline in " +
-      "a small text file using YAML, a simple, readable key-and-value format. They give it " +
-      "a name and a schedule, then list the steps, and each step just picks a blueprint and " +
-      "fills in its values. That's it. The 25-line customers.py becomes a handful of lines, " +
-      "and it still gets retries and the Variable, because those live in the blueprint.",
+    teach: "Analysts compose pipelines in YAML, not Python.",
     points: [
       "Pipelines are now described in a small YAML file, not Python.",
       "YAML is a plain, readable key-and-value text format.",
@@ -1120,11 +1050,7 @@ steps:
     file: "dags/sales.dag.yaml",
     title: "Step 5: Wire the steps",
     prompt: "ingest_orders must run after ingest_customers. How?",
-    teach:
-      "Pipelines have an order: some steps must finish before others can start. In the " +
-      "YAML you simply list the steps a step should wait for, with depends_on. Blueprint " +
-      "connects them in the right order for you, and even checks you didn't create an " +
-      "impossible loop (A waits for B while B waits for A). No Airflow wiring code to learn.",
+    teach: "Set the order between steps in YAML with depends_on.",
     points: [
       "Steps often need an order: do this, then that.",
       "`depends_on` lists the steps a step should wait for.",
@@ -1164,12 +1090,7 @@ steps:
     file: "dags/marketing.dag.yaml",
     title: "Step 6: A second pipeline, for free",
     prompt: "A new team needs a campaigns pipeline. What do they write?",
-    teach:
-      "Here's why teams love this. Another team needs a new pipeline? They write no " +
-      "Python, they add one small YAML file that reuses the same blueprint. Their pipeline " +
-      "is automatically consistent and validated, because it's built from the same " +
-      "template. And when you improve the blueprint later (say, add a timeout), every " +
-      "pipeline built from it gets that improvement at once.",
+    teach: "A new pipeline is just another YAML file reusing the blueprint.",
     points: [
       "A new pipeline is just one more small YAML file, no Python.",
       "It reuses the same template, so it's consistent and validated by default.",
@@ -1204,11 +1125,7 @@ steps:
     file: "dags/loader.py",
     title: "Step 7: Load the YAML DAGs",
     prompt: "How does Airflow turn every *.dag.yaml into a DAG?",
-    teach:
-      "One last piece connects this to Airflow. Airflow finds DAGs by scanning Python " +
-      "files, but our pipelines are YAML now. So we add a single small file, the loader, " +
-      "that says: find every YAML pipeline and turn it into a real DAG. You write it once " +
-      "for the whole project, and from then on, adding a pipeline is just dropping in a YAML file.",
+    teach: "One loader turns every YAML file into a real DAG.",
     points: [
       "Airflow normally discovers DAGs from Python files, but ours are YAML.",
       "One small `loader.py` calls `build_all_dags()` to turn every YAML into a DAG.",
