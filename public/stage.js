@@ -49,7 +49,6 @@ function playLevelTransition(level) {
   setTimeout(() => doors.classList.remove("closed"), 1700); // hold, then open
   setTimeout(() => doors.classList.remove("active"), 2400); // hide once open
   if (typeof sfx !== "undefined") sfx.levelup();
-  if (typeof burstConfetti === "function") setTimeout(() => burstConfetti(200), 1700);
 }
 
 // ── Join URL + QR ────────────────────────────────────────────
@@ -473,46 +472,8 @@ const sfx = {
   levelup: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.28, "triangle", 0.12)),
 };
 
-// ── Confetti (self-contained canvas burst) ───────────────────
-const confettiCanvas = el("confetti");
-const cctx = confettiCanvas.getContext("2d");
-let confParts = [], confRAF = null;
-function sizeConfetti() { confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight; }
-sizeConfetti();
-addEventListener("resize", sizeConfetti);
-function burstConfetti(count) {
-  sizeConfetti();
-  const colors = ["#9146ff", "#00f593", "#1db3ff", "#ffca5f", "#ffffff"];
-  for (let i = 0; i < (count || 140); i++) {
-    confParts.push({
-      x: Math.random() * innerWidth,
-      y: -20 - Math.random() * innerHeight * 0.3,
-      vx: (Math.random() - 0.5) * 6,
-      vy: 3 + Math.random() * 5,
-      g: 0.12 + Math.random() * 0.08,
-      size: 6 + Math.random() * 6,
-      rot: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.3,
-      color: colors[i % colors.length],
-    });
-  }
-  if (!confRAF) confLoop();
-}
-function confLoop() {
-  cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-  for (const p of confParts) {
-    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-    cctx.save();
-    cctx.translate(p.x, p.y);
-    cctx.rotate(p.rot);
-    cctx.fillStyle = p.color;
-    cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
-    cctx.restore();
-  }
-  confParts = confParts.filter((p) => p.y < confettiCanvas.height + 40);
-  if (confParts.length) confRAF = requestAnimationFrame(confLoop);
-  else { confRAF = null; cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
-}
+// Confetti lives on the Player view now: it's a personal reward for the people
+// who actually got the answer right (the Stage keeps the fanfare + door cues).
 
 // ── Countdown timer (presenter-started; clients sync via server clock) ───────
 let skew = 0; // serverNow - localNow, to correct clock drift
@@ -568,10 +529,7 @@ socket.on("state", (s) => {
   // Phase-transition cues (fire once per change).
   if (s.phase !== lastPhase) {
     if (s.phase === "voting" && s.deadline) lastTickSec = null; // arm tick sounds
-    if (s.phase === "revealed") {
-      sfx.reveal();
-      if (s.roundAccuracy != null && s.roundAccuracy >= 70) burstConfetti(160);
-    }
+    if (s.phase === "revealed") sfx.reveal();
     lastPhase = s.phase;
   }
   // Run/stop the countdown loop to match the current round.

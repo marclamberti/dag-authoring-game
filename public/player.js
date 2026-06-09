@@ -39,6 +39,7 @@ socket.on("result", (r) => {
   if (r.correct) {
     blip(988, 0.18, 0.09);
     vibrate([0, 35, 45, 35]); // celebratory double buzz
+    burstConfetti(110); // your reward for nailing it
   } else {
     blip(220, 0.22, 0.07);
     vibrate(120); // single longer buzz
@@ -49,6 +50,7 @@ socket.on("result", (r) => {
 // ── State ────────────────────────────────────────────────────
 let cur = null;
 let skew = 0; // serverNow - localNow, to sync the countdown to the server clock
+let lastLevel = null; // to celebrate reaching a new level
 socket.on("state", (s) => {
   if (typeof s.serverNow === "number") skew = s.serverNow - Date.now();
   cur = s;
@@ -59,6 +61,10 @@ socket.on("state", (s) => {
     myVote = null;
     lastResult = null;
   }
+  // Reaching a new level is a shared win — confetti for the whole room.
+  const lvl = s.step ? s.step.level : null;
+  if (lvl && lastLevel !== null && lvl > lastLevel) burstConfetti(150);
+  if (lvl) lastLevel = lvl;
   render();
   // Run the local countdown only while the host's timer is live.
   if (s.phase === "voting" && s.deadline) {
@@ -107,6 +113,47 @@ function blip(freq, dur, gain) {
 }
 function vibrate(pattern) {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (_) {}
+}
+
+// ── Confetti (self-contained canvas burst) ───────────────────
+const confettiCanvas = el("confetti");
+const cctx = confettiCanvas.getContext("2d");
+let confParts = [], confRAF = null;
+function sizeConfetti() { confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight; }
+sizeConfetti();
+addEventListener("resize", sizeConfetti);
+function burstConfetti(count) {
+  sizeConfetti();
+  const colors = ["#9146ff", "#00f593", "#1db3ff", "#ffca5f", "#ffffff"];
+  for (let i = 0; i < (count || 120); i++) {
+    confParts.push({
+      x: Math.random() * innerWidth,
+      y: -20 - Math.random() * innerHeight * 0.3,
+      vx: (Math.random() - 0.5) * 6,
+      vy: 3 + Math.random() * 5,
+      g: 0.12 + Math.random() * 0.08,
+      size: 6 + Math.random() * 6,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      color: colors[i % colors.length],
+    });
+  }
+  if (!confRAF) confLoop();
+}
+function confLoop() {
+  cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  for (const p of confParts) {
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+    cctx.save();
+    cctx.translate(p.x, p.y);
+    cctx.rotate(p.rot);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    cctx.restore();
+  }
+  confParts = confParts.filter((p) => p.y < confettiCanvas.height + 40);
+  if (confParts.length) confRAF = requestAnimationFrame(confLoop);
+  else { confRAF = null; cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
 }
 
 function show(screen) {

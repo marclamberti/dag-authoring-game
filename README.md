@@ -60,9 +60,10 @@ The build doubles as a game show, all client-side, no extra setup:
   Length is 20s by default, or per-step via a `seconds` field in `steps.js`.
 - **Streak multiplier** — consecutive correct answers score `100 × min(streak, 3)`
   (a wrong answer resets the combo), shown as a 🔥 flame on the leaderboard.
-- **Sound, confetti & haptics** — vote blips, a reveal sting, a last-5-seconds
-  heartbeat and a level-up fanfare (Web Audio, no asset files); confetti on
-  level-up and when the room is sharp; phones buzz on your result.
+- **Sound, confetti & haptics** — the Stage plays vote blips, a reveal sting, a
+  last-5-seconds heartbeat and a level-up fanfare (Web Audio, no asset files).
+  Confetti fires on each player's **own** phone when they get the answer right
+  (plus a shared burst on level-up), and phones buzz on your result.
 - **Animated leaderboard** — rows slide to their new rank (FLIP) as scores change.
 - **Co-op hype meter** — each reveal shows the room's collective accuracy this
   round plus the running session accuracy, framing it as a team effort.
