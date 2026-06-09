@@ -48,6 +48,8 @@ function playLevelTransition(level) {
   doors.classList.add("closed");
   setTimeout(() => doors.classList.remove("closed"), 1700); // hold, then open
   setTimeout(() => doors.classList.remove("active"), 2400); // hide once open
+  if (typeof sfx !== "undefined") sfx.levelup();
+  if (typeof burstConfetti === "function") setTimeout(() => burstConfetti(200), 1700);
 }
 
 // ── Join URL + QR ────────────────────────────────────────────
@@ -241,19 +243,42 @@ function renderOptions() {
     .join("");
 }
 
+// Animated leaderboard: rows slide to their new rank via FLIP. The streak flame
+// is rendered static (no growing) — only positions animate.
 function renderLeaderboard() {
+  const container = el("leaderboard");
   const lb = (cur && cur.leaderboard) || [];
-  el("leaderboard").innerHTML =
+  // FIRST: record where each named row currently sits.
+  const firstTop = {};
+  container.querySelectorAll(".lead-row[data-name]").forEach((r) => {
+    firstTop[r.dataset.name] = r.offsetTop;
+  });
+
+  container.innerHTML =
     lb.length === 0
       ? '<div class="lead-row"><span class="nm" style="color:var(--muted)">No players yet</span></div>'
       : lb
           .map(
             (p, i) =>
-              `<div class="lead-row"><span class="rank">${i + 1}</span><span class="nm">${escapeHtml(
+              `<div class="lead-row" data-name="${escapeHtml(p.name)}"><span class="rank">${i + 1}</span><span class="nm">${escapeHtml(
                 p.name
               )}${p.streak >= 2 ? ` <span class="streak">🔥${p.streak}</span>` : ""}</span><span class="sc">${p.score}</span></div>`
           )
           .join("");
+
+  // LAST + INVERT + PLAY: offset each moved row to its old spot, then release.
+  container.querySelectorAll(".lead-row[data-name]").forEach((r) => {
+    const prev = firstTop[r.dataset.name];
+    if (prev === undefined) return;
+    const dy = prev - r.offsetTop;
+    if (!dy) return;
+    r.style.transition = "none";
+    r.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      r.style.transition = "transform 420ms cubic-bezier(.2,.8,.2,1)";
+      r.style.transform = "";
+    });
+  });
 }
 
 function renderControls() {
@@ -262,7 +287,7 @@ function renderControls() {
   const isLast = cur && cur.step && cur.step.index + 1 >= cur.step.total;
   if (phase === "lobby") btn.textContent = "Start";
   else if (phase === "teaching") btn.textContent = "Start vote";
-  else if (phase === "voting") btn.textContent = "Reveal results";
+  else if (phase === "voting") btn.textContent = cur.deadline ? "Reveal now" : "Start countdown";
   else if (phase === "revealed")
     btn.textContent = cur.step.explainFirst ? (isLast ? "Finish" : "Next step") : "Show explanation";
   else if (phase === "explaining") btn.textContent = isLast ? "Finish" : "Next step";
@@ -419,10 +444,143 @@ function renderRun(lines, stepIndex) {
   }, 240);
 }
 
+// ── Sound (Web Audio, no asset files) ────────────────────────
+let actx = null;
+function audio() {
+  if (!actx) {
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+  }
+  if (actx && actx.state === "suspended") actx.resume();
+  return actx;
+}
+function tone(freq, at, dur, type, gain) {
+  const a = audio();
+  if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type || "sine";
+  o.frequency.value = freq;
+  o.connect(g); g.connect(a.destination);
+  const t = a.currentTime + (at || 0);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(gain || 0.12, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.2));
+  o.start(t);
+  o.stop(t + (dur || 0.2) + 0.03);
+}
+const sfx = {
+  tick: () => tone(1175, 0, 0.08, "square", 0.06), // last-5s heartbeat
+  reveal: () => { tone(659, 0, 0.16, "sine", 0.12); tone(988, 0.07, 0.24, "sine", 0.11); },
+  levelup: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.28, "triangle", 0.12)),
+};
+
+// ── Confetti (self-contained canvas burst) ───────────────────
+const confettiCanvas = el("confetti");
+const cctx = confettiCanvas.getContext("2d");
+let confParts = [], confRAF = null;
+function sizeConfetti() { confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight; }
+sizeConfetti();
+addEventListener("resize", sizeConfetti);
+function burstConfetti(count) {
+  sizeConfetti();
+  const colors = ["#9146ff", "#00f593", "#1db3ff", "#ffca5f", "#ffffff"];
+  for (let i = 0; i < (count || 140); i++) {
+    confParts.push({
+      x: Math.random() * innerWidth,
+      y: -20 - Math.random() * innerHeight * 0.3,
+      vx: (Math.random() - 0.5) * 6,
+      vy: 3 + Math.random() * 5,
+      g: 0.12 + Math.random() * 0.08,
+      size: 6 + Math.random() * 6,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      color: colors[i % colors.length],
+    });
+  }
+  if (!confRAF) confLoop();
+}
+function confLoop() {
+  cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+  for (const p of confParts) {
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+    cctx.save();
+    cctx.translate(p.x, p.y);
+    cctx.rotate(p.rot);
+    cctx.fillStyle = p.color;
+    cctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    cctx.restore();
+  }
+  confParts = confParts.filter((p) => p.y < confettiCanvas.height + 40);
+  if (confParts.length) confRAF = requestAnimationFrame(confLoop);
+  else { confRAF = null; cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
+}
+
+// ── Countdown timer (presenter-started; clients sync via server clock) ───────
+let skew = 0; // serverNow - localNow, to correct clock drift
+let timerRAF = null;
+let lastTickSec = null;
+function stopTimer() {
+  if (timerRAF) cancelAnimationFrame(timerRAF);
+  timerRAF = null;
+  el("timer").classList.add("hidden");
+}
+function timerLoop() {
+  if (!cur || cur.phase !== "voting" || !cur.deadline) return stopTimer();
+  const remain = cur.deadline - (Date.now() + skew);
+  const dur = cur.durationMs || 20000;
+  const frac = Math.max(0, Math.min(1, remain / dur));
+  const secs = Math.max(0, Math.ceil(remain / 1000));
+  const t = el("timer");
+  t.classList.remove("hidden");
+  el("timer-bar").style.width = frac * 100 + "%";
+  el("timer-num").textContent = secs;
+  t.classList.toggle("urgent", secs <= 5);
+  if (secs !== lastTickSec) {
+    if (lastTickSec !== null && secs <= 5 && secs > 0) sfx.tick();
+    lastTickSec = secs;
+  }
+  timerRAF = requestAnimationFrame(timerLoop);
+}
+
+// ── Co-op hype meter (room accuracy on reveal) ───────────────
+function renderHype() {
+  const hype = el("hype");
+  if (!cur || cur.phase !== "revealed" || cur.roundAccuracy == null) {
+    hype.classList.add("hidden");
+    return;
+  }
+  const acc = cur.roundAccuracy;
+  const mood = acc >= 80 ? "The room nailed it" : acc >= 50 ? "Room's dialing in" : "A tricky one";
+  const session = cur.sessionAccuracy != null ? `<span>Session ${cur.sessionAccuracy}%</span>` : "<span></span>";
+  hype.classList.remove("hidden");
+  hype.innerHTML =
+    `<div class="hype-label">Room accuracy</div>` +
+    `<div class="hype-track"><div class="hype-fill" style="width:${acc}%"></div></div>` +
+    `<div class="hype-meta"><span>${acc}% correct · ${mood}</span>${session}</div>`;
+}
+
 // ── Socket events ────────────────────────────────────────────
+let lastPhase = null;
 socket.on("state", (s) => {
+  // Sync to the server clock so the countdown is consistent across machines.
+  if (typeof s.serverNow === "number") skew = s.serverNow - Date.now();
   cur = s;
   render();
+  // Phase-transition cues (fire once per change).
+  if (s.phase !== lastPhase) {
+    if (s.phase === "voting" && s.deadline) lastTickSec = null; // arm tick sounds
+    if (s.phase === "revealed") {
+      sfx.reveal();
+      if (s.roundAccuracy != null && s.roundAccuracy >= 70) burstConfetti(160);
+    }
+    lastPhase = s.phase;
+  }
+  // Run/stop the countdown loop to match the current round.
+  if (s.phase === "voting" && s.deadline) {
+    if (!timerRAF) timerLoop();
+  } else {
+    stopTimer();
+  }
+  renderHype();
 });
 socket.on("votes", ({ votes, totalVotes }) => {
   if (!cur) return;
@@ -433,10 +591,11 @@ socket.on("votes", ({ votes, totalVotes }) => {
 
 // ── Controls ─────────────────────────────────────────────────
 el("btn-main").addEventListener("click", () => {
+  audio(); // unlock the audio context on a user gesture
   const phase = cur ? cur.phase : "lobby";
   if (phase === "lobby" || phase === "finished") socket.emit("start");
   else if (phase === "teaching") socket.emit("startVote");
-  else if (phase === "voting") socket.emit("reveal");
+  else if (phase === "voting") socket.emit(cur.deadline ? "reveal" : "startCountdown");
   else if (phase === "revealed") socket.emit(cur.step.explainFirst ? "next" : "explain");
   else if (phase === "explaining") socket.emit("next");
 });

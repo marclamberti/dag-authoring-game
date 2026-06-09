@@ -33,13 +33,23 @@ app.get("/stage", (_req, res) =>
 // ── Session state ──────────────────────────────────────────────────────────
 const players = {}; // socketId -> { name, score }
 const DEFAULT_FILE = "dags/sales_pipeline.py";
+const DEFAULT_SECONDS = 20; // countdown length when a step doesn't set `seconds`
+let countdownTimer = null; // setTimeout handle for the presenter-started countdown
 const state = {
   phase: "lobby", // lobby | teaching | voting | revealed | explaining | finished
   stepIndex: -1,
   votes: {}, // optionId -> count (current step)
   voters: {}, // socketId -> optionId (current step)
+  voteTimes: {}, // socketId -> ms timestamp the vote landed (for the speed bonus)
+  deadline: null, // ms timestamp the countdown ends (null until the host starts it)
+  countdownStart: 0, // ms timestamp the countdown started
+  roundAccuracy: null, // % of voters correct this round (set at reveal)
+  sessionCorrect: 0, // running totals for the session-wide hype meter
+  sessionVotes: 0,
   committed: {}, // filename -> committed code (one entry per file being built)
 };
+
+const stepSeconds = (s) => (s && s.seconds) || DEFAULT_SECONDS;
 
 const currentStep = () => (state.stepIndex >= 0 ? steps[state.stepIndex] : null);
 const fileOf = (s) => (s && s.file) || DEFAULT_FILE;
@@ -126,11 +136,29 @@ function fullState() {
     activeFile: s ? fileOf(s) : null,
     playerCount: playerList().length,
     leaderboard: leaderboard(),
+    // Presenter-started countdown. Clients sync their local timer off the skew
+    // between `serverNow` and their own clock, then tick to `deadline`.
+    deadline: state.phase === "voting" ? state.deadline : null,
+    durationMs: stepSeconds(s) * 1000,
+    serverNow: Date.now(),
+    // Co-op hype meter: this round's collective accuracy (post-vote) and the
+    // running session accuracy across all rounds so far.
+    roundAccuracy: postVote ? state.roundAccuracy : null,
+    sessionAccuracy: state.sessionVotes
+      ? Math.round((state.sessionCorrect / state.sessionVotes) * 100)
+      : null,
   };
 }
 
 function broadcast() {
   io.emit("state", fullState());
+}
+
+function clearCountdown() {
+  if (countdownTimer) clearTimeout(countdownTimer);
+  countdownTimer = null;
+  state.deadline = null;
+  state.countdownStart = 0;
 }
 
 function goToStep(i) {
@@ -140,6 +168,9 @@ function goToStep(i) {
   state.phase = steps[i].explainFirst ? "teaching" : "voting";
   state.votes = {};
   state.voters = {};
+  state.voteTimes = {};
+  state.roundAccuracy = null;
+  clearCountdown();
   const cs = steps[i];
   if (cs.kind === "review") state.votes = { approve: 0, request: 0 };
   else if (cs.kind !== "bug" && cs.options) for (const o of cs.options) state.votes[o.id] = 0;
@@ -155,6 +186,69 @@ function goToStep(i) {
   // during voting, before any code is committed.
   if (steps[i].preload) {
     for (const [f, code] of Object.entries(steps[i].preload)) {
+      if (state.committed[f] === undefined) state.committed[f] = code;
+    }
+  }
+  broadcast();
+}
+
+// Lock votes, score everyone (streak × speed bonus), tally room accuracy, and
+// commit the snippet. Called by the "reveal" button OR the countdown timeout.
+function doReveal() {
+  if (state.phase !== "voting") return;
+  state.phase = "revealed";
+  const deadlineWas = state.deadline; // capture before clearCountdown() nulls it
+  clearCountdown();
+  const s = currentStep();
+  const correct = correctAnswerId(s);
+  const dur = stepSeconds(s) * 1000;
+  let correctCount = 0;
+  const voterIds = Object.keys(state.voters);
+  for (const sid of voterIds) {
+    const p = players[sid];
+    if (!p) continue;
+    const got = state.voters[sid] === correct;
+    let gained = 0;
+    let mult = 0;
+    let speed = 1;
+    if (got) {
+      correctCount++;
+      // Streak multiplier: each consecutive correct answer is worth more.
+      p.streak = (p.streak || 0) + 1;
+      mult = multiplierFor(p.streak);
+      // Speed bonus: answering with more time left earns up to +50%.
+      const t = state.voteTimes[sid];
+      if (deadlineWas && t) {
+        const frac = Math.max(0, Math.min(1, (deadlineWas - t) / dur));
+        speed = 1 + 0.5 * frac;
+      }
+      gained = Math.round((100 * mult * speed) / 10) * 10;
+      p.score += gained;
+    } else {
+      p.streak = 0; // a wrong answer breaks the combo
+    }
+    io.to(sid).emit("result", {
+      correct: got,
+      correctId: correct,
+      gained,
+      multiplier: mult,
+      speed: +speed.toFixed(2),
+      streak: p.streak,
+      score: p.score,
+    });
+  }
+  // Co-op hype meter: this round's accuracy + the running session accuracy.
+  state.roundAccuracy = voterIds.length
+    ? Math.round((correctCount / voterIds.length) * 100)
+    : null;
+  state.sessionCorrect += correctCount;
+  state.sessionVotes += voterIds.length;
+  // Commit the best-practice snippet into this step's file at reveal time, so
+  // the code appears as the result is shown (not later on Next).
+  if (s.snapshot !== undefined) state.committed[fileOf(s)] = s.snapshot;
+  // Seed any additional files (e.g. the downstream DAG) the first time only.
+  if (s.seed) {
+    for (const [f, code] of Object.entries(s.seed)) {
       if (state.committed[f] === undefined) state.committed[f] = code;
     }
   }
@@ -180,6 +274,8 @@ io.on("connection", (socket) => {
   socket.on("vote", ({ optionId }) => {
     const p = players[socket.id];
     if (!p || state.phase !== "voting") return;
+    // Votes only count while the presenter's countdown is live.
+    if (!state.deadline || Date.now() > state.deadline) return;
     const s = currentStep();
     let valid;
     if (s.kind === "bug") {
@@ -197,6 +293,7 @@ io.on("connection", (socket) => {
     if (prev) state.votes[prev] = Math.max(0, (state.votes[prev] || 0) - 1);
     state.voters[socket.id] = optionId;
     state.votes[optionId] = (state.votes[optionId] || 0) + 1;
+    state.voteTimes[socket.id] = Date.now(); // for the speed bonus at reveal
 
     socket.emit("voted", { optionId });
     io.emit("votes", { votes: state.votes, totalVotes: Object.values(state.votes).reduce((a, b) => a + b, 0) });
@@ -217,46 +314,19 @@ io.on("connection", (socket) => {
     broadcast();
   });
 
-  socket.on("reveal", () => {
-    if (state.phase !== "voting") return;
-    state.phase = "revealed";
-    const s = currentStep();
-    const correct = correctAnswerId(s);
-    for (const [sid, opt] of Object.entries(state.voters)) {
-      const p = players[sid];
-      if (!p) continue;
-      const got = opt === correct;
-      let gained = 0;
-      let mult = 0;
-      if (got) {
-        // Streak multiplier: each consecutive correct answer is worth more.
-        p.streak = (p.streak || 0) + 1;
-        mult = multiplierFor(p.streak);
-        gained = 100 * mult;
-        p.score += gained;
-      } else {
-        p.streak = 0; // a wrong answer breaks the combo
-      }
-      io.to(sid).emit("result", {
-        correct: got,
-        correctId: correct,
-        gained,
-        multiplier: mult,
-        streak: p.streak,
-        score: p.score,
-      });
-    }
-    // Commit the best-practice snippet into this step's file at reveal time, so
-    // the code appears as the result is shown (not later on Next).
-    if (s.snapshot !== undefined) state.committed[fileOf(s)] = s.snapshot;
-    // Seed any additional files (e.g. the downstream DAG) the first time only.
-    if (s.seed) {
-      for (const [f, code] of Object.entries(s.seed)) {
-        if (state.committed[f] === undefined) state.committed[f] = code;
-      }
-    }
+  // Presenter starts the timer when the room is ready; votes are only accepted
+  // while it runs, and it auto-reveals when it hits zero.
+  socket.on("startCountdown", () => {
+    if (state.phase !== "voting" || state.deadline) return;
+    const dur = stepSeconds(currentStep()) * 1000;
+    state.countdownStart = Date.now();
+    state.deadline = state.countdownStart + dur;
+    if (countdownTimer) clearTimeout(countdownTimer);
+    countdownTimer = setTimeout(doReveal, dur);
     broadcast();
   });
+
+  socket.on("reveal", doReveal);
 
   // Reveal -> Show explanation: turn the right panel into the step's slide.
   socket.on("explain", () => {
@@ -281,6 +351,11 @@ io.on("connection", (socket) => {
     state.stepIndex = -1;
     state.votes = {};
     state.voters = {};
+    state.voteTimes = {};
+    state.roundAccuracy = null;
+    state.sessionCorrect = 0;
+    state.sessionVotes = 0;
+    clearCountdown();
     state.committed = {};
     for (const id in players) {
       players[id].score = 0;

@@ -38,15 +38,34 @@ Then open:
 Drive the session from the Stage:
 
 1. **Start** opens the first round.
-2. Audience votes; the bar fills live. (Explain-first steps open on a teaching
-   slide first; click **Start vote** when ready.)
-3. **Reveal results** locks votes, shows the split, highlights the best-practice
-   option, scores correct voters, and types the snippet into the editor.
+2. **Start countdown** opens the vote window — a timer drains on every screen and
+   votes are only accepted while it runs. (Explain-first steps open on a teaching
+   slide first; click **Start vote** when ready, then **Start countdown**.)
+3. Audience votes; the bar fills live. **Reveal now** locks votes early, or the
+   timer auto-reveals at zero. Reveal shows the split, highlights the
+   best-practice option, scores correct voters, and types the snippet into the
+   editor.
 4. **Show explanation** turns the right panel into a slide (why + takeaways);
    then **Next step** moves on. (Explain-first steps skip straight to Next.)
 
 `Reset` clears the editor and all scores back to the lobby. Crossing into a new
 level plays a door transition and starts the editor fresh (scores carry over).
+
+### Game feel
+
+The build doubles as a game show, all client-side, no extra setup:
+
+- **Presenter-started countdown + speed bonus** — you click **Start countdown**
+  when the room is ready; answering earlier in the window is worth up to +50%.
+  Length is 20s by default, or per-step via a `seconds` field in `steps.js`.
+- **Streak multiplier** — consecutive correct answers score `100 × min(streak, 3)`
+  (a wrong answer resets the combo), shown as a 🔥 flame on the leaderboard.
+- **Sound, confetti & haptics** — vote blips, a reveal sting, a last-5-seconds
+  heartbeat and a level-up fanfare (Web Audio, no asset files); confetti on
+  level-up and when the room is sharp; phones buzz on your result.
+- **Animated leaderboard** — rows slide to their new rank (FLIP) as scores change.
+- **Co-op hype meter** — each reveal shows the room's collective accuracy this
+  round plus the running session accuracy, framing it as a team effort.
 
 ### Running it for a real (remote) audience
 
@@ -131,6 +150,7 @@ Each step is one object in `steps.js`:
   level: 1,               // optional (default 1); a new level triggers the door transition
   file: "dags/sales_pipeline.py", // optional (default); which editor tab this step builds
   explainFirst: true,     // optional; open on the teaching slide before the vote
+  seconds: 20,            // optional (default 20); countdown length for this round
   title: "Step 6: Make the first task idempotent",
   prompt: "get_date returns the run's date. What should it return?",
   teach: "Return the run logical date (ds), not the wall clock.", // one-line slide headline

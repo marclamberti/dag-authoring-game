@@ -37,6 +37,16 @@ function assert(cond, msg) {
   const correctId = require("./steps.js")[0].options.find((o) => o.correct).id;
   const wrongId = require("./steps.js")[0].options.find((o) => !o.correct).id;
 
+  // Votes are ignored until the presenter starts the countdown.
+  let votedEarly = false;
+  alice.once("voted", () => { votedEarly = true; });
+  alice.emit("vote", { optionId: correctId });
+  await wait(120);
+  assert(!votedEarly, "votes are ignored until the host starts the countdown");
+
+  // Start the countdown, then vote.
+  stage.emit("startCountdown");
+  await wait(60);
   alice.emit("vote", { optionId: correctId }); // Alice right
   bob.emit("vote", { optionId: wrongId }); //   Bob wrong
   await wait(200);
@@ -50,9 +60,13 @@ function assert(cond, msg) {
 
   assert(rev.phase === "revealed", "phase is revealed after Reveal");
   assert(rev.correctId === correctId, "correct option exposed on reveal");
-  assert(ar.correct === true && ar.score === 100, "Alice scored 100 for correct vote");
+  assert(ar.correct === true && ar.gained >= 100 && ar.score === ar.gained,
+    "Alice scored for correct vote (base 100 + speed bonus)");
+  assert(ar.speed > 1, "speed bonus applied for answering early in the countdown");
   assert(br.correct === false && br.score === 0, "Bob scored 0 for wrong vote");
-  assert(rev.leaderboard[0].name === "Alice" && rev.leaderboard[0].score === 100,
+  assert(typeof rev.roundAccuracy === "number" && rev.roundAccuracy === 50,
+    "room accuracy reflects 1 of 2 voters correct");
+  assert(rev.leaderboard[0].name === "Alice" && rev.leaderboard[0].score === ar.score,
     "Alice tops the leaderboard");
   assert(rev.points == null, "explanation points hidden until Show explanation");
   assert(rev.files["dags/sales_pipeline.py"] === require("./steps.js")[0].snapshot,
@@ -102,6 +116,8 @@ function assert(cond, msg) {
       stage.emit("startVote");
       s = await v;
     }
+    stage.emit("startCountdown"); // open the vote window
+    await wait(40);
     alice.emit("vote", { optionId: correctVote(STEPS[idx]) });
     await wait(50);
     const revd = next(stage, "state");

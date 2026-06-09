@@ -31,7 +31,12 @@
         <div class="q-prompt" id="q-prompt">
           Scan to join. The whole room votes on every line of best-practice Airflow 3.
         </div>
+        <div class="timer hidden" id="timer">
+          <div class="timer-track"><div class="timer-bar" id="timer-bar"></div></div>
+          <div class="timer-num" id="timer-num">20</div>
+        </div>
         <div class="options" id="options"></div>
+        <div class="hype hidden" id="hype"></div>
       </div>
 
       <!-- Explanation "slide", shown after Reveal, replaces the panel above -->
@@ -67,6 +72,9 @@
       </div>
     </aside>
   </div>
+
+  <!-- Confetti overlay (celebrations on level-up / a sharp room) -->
+  <canvas class="confetti-canvas" id="confetti" aria-hidden="true"></canvas>
 
   <!-- Level transition: doors slide shut, show the level, slide open -->
   <div class="level-doors" id="level-doors" aria-hidden="true">

@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -35,12 +37,14 @@
     <div class="center hidden" id="vote-screen">
       <div class="p-title" id="p-title"></div>
       <div class="p-prompt" id="p-prompt"></div>
+      <div class="p-timer hidden" id="p-timer"><span id="p-timer-num"></span> s left</div>
       <div class="p-options" id="p-options"></div>
       <div class="pill hidden" id="p-status"></div>
       <div class="score-tag" id="p-score"></div>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/player.js"></script>
 </body>

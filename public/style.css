@@ -523,34 +523,44 @@ button { font-family: inherit; cursor: pointer; }
 /* Leaderboard streak flame */
 .streak { color: var(--warning); font-size: 12px; font-weight: 700; }
 
-/* Player: "spot the bug" tappable code lines */
-.p-line {
-  display: flex;
-  gap: var(--space-2);
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  background: var(--bg-alt);
-  color: var(--text-base);
+/* Player: "spot the bug" — one code editor (line numbers + syntax highlight),
+   tap a line. .hljs (atom-one-dark) gives the block its background + base color. */
+.code-block {
   border: 1px solid var(--bg-input);
   border-radius: var(--radius-md);
-  padding: 8px 10px;
-  transition: border-color 100ms ease, background 100ms ease;
+  overflow: hidden;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
 }
-.p-line .p-ln {
-  width: 22px;
+.code-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  padding: 1px 10px 1px 6px;
+  color: inherit;
+  font: inherit;
+}
+.code-line:hover { background: rgba(255, 255, 255, 0.05); }
+.code-line:active { background: rgba(255, 255, 255, 0.09); }
+.code-line .gutter {
+  width: 20px;
   flex-shrink: 0;
   text-align: right;
   color: var(--text-alt-2);
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  user-select: none;
 }
-.p-line .p-code { margin: 0; font-size: 13px; white-space: pre; overflow-x: auto; }
-.p-line:active { transform: scale(0.99); }
-.p-line.picked { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(145, 70, 255, 0.4) inset; }
-.p-line.correct { border-color: var(--success); background: rgba(0, 245, 147, 0.08); }
-.p-line.wrong { border-color: var(--live); opacity: 0.6; }
+.code-line .ln-code { white-space: pre; overflow-x: auto; }
+.code-line.picked { border-left-color: var(--purple); background: rgba(145, 70, 255, 0.16); }
+.code-line.correct { border-left-color: var(--success); background: rgba(0, 245, 147, 0.16); }
+.code-line.wrong { border-left-color: var(--live); background: rgba(235, 4, 0, 0.16); }
+.code-line[disabled] { cursor: default; }
 
 /* Player: "you're the reviewer" diff + Approve / Request buttons */
 .p-diff {
@@ -563,3 +573,86 @@ button { font-family: inherit; cursor: pointer; }
 }
 .p-diff-line { white-space: pre; font-size: 12px; line-height: 1.5; }
 .p-review-btn { text-align: center; font-size: 18px; }
+
+/* ── Gamification UI ───────────────────────────────────────────────────────
+   Countdown timer (Stage + Player), co-op hype meter, confetti overlay. */
+
+/* Stage countdown: a draining bar with the seconds-left badge. */
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 14px;
+}
+.timer-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-input);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.timer-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--info);
+  border-radius: var(--radius-pill);
+}
+.timer-num {
+  min-width: 2.2ch;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-base);
+}
+.timer.urgent .timer-bar { background: var(--live); }
+.timer.urgent .timer-num { color: var(--live); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+
+/* Co-op hype meter (Stage): how the whole room did this round. */
+.hype { margin-top: 16px; }
+.hype-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-alt-2);
+  margin-bottom: 6px;
+}
+.hype-track {
+  height: 10px;
+  background: var(--bg-input);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.hype-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: var(--radius-pill);
+  transition: width 600ms cubic-bezier(.2, .8, .2, 1);
+}
+.hype-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-alt);
+}
+
+/* Confetti overlay: full-screen, click-through, above everything but doors. */
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 60;
+}
+
+/* Player countdown badge. */
+.p-timer {
+  align-self: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--info);
+  margin-bottom: 6px;
+}
+.p-timer.urgent { color: var(--live); animation: pulse 1s ease-in-out infinite; }
