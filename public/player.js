@@ -195,7 +195,6 @@ function render() {
 
 // ── Level 3 lab: your own Airflow ────────────────────────────
 let sandbox = { status: "idle" }; // updated by the per-socket "sandbox" event
-let frameUrl = null; // url currently shown in the iframe (avoid reloads)
 socket.on("sandbox", (sb) => {
   sandbox = sb || { status: "idle" };
   if (cur && cur.phase === "lab") renderSandbox();
@@ -217,40 +216,26 @@ function renderSandbox() {
   const st = sandbox.status;
 
   if (!cur.sandboxEnabled || st === "unavailable") {
-    frameUrl = null;
     box.innerHTML =
       '<div class="lab-msg">Live sandboxes aren\'t enabled for this session — just follow along on the big screen.</div>';
     return;
   }
 
-  // Frame states: build the iframe once per URL, then only toggle the booting
-  // overlay so flipping booting -> ready never reloads Airflow.
+  // Airflow opens in a new tab (a cross-origin iframe can't run it — browsers
+  // block the storage its UI needs). As soon as we have a URL, show the button.
   if ((st === "booting" || st === "ready") && sandbox.url) {
-    if (frameUrl !== sandbox.url) {
-      frameUrl = sandbox.url;
-      const u = escapeAttr(sandbox.url);
-      // The embedded preview works on most desktop browsers, but Safari/iOS
-      // block the cross-origin storage Airflow's UI needs, so the page can come
-      // up blank there. The "Open" button (a normal tab) always works — make it
-      // the prominent primary action.
-      box.innerHTML =
-        `<a class="p-opt lab-open-primary" href="${u}" target="_blank" rel="noopener">Open my Airflow ↗</a>` +
-        `<div class="lab-frame-note">Preview below. If it's blank, your browser is blocking the embed — use the button above.</div>` +
-        `<div class="lab-frame-wrap">` +
-        `<div class="lab-overlay" id="lab-overlay"><div class="spinner"></div>` +
-        `<div>Booting Airflow… the first load can take ~90s</div></div>` +
-        `<iframe class="lab-frame" src="${u}" title="Your Airflow"></iframe></div>` +
-        `<div class="lab-frame-actions">` +
-        `<a class="lab-open" href="${u}" target="_blank" rel="noopener">Open in a new tab ↗</a>` +
-        `<button class="lab-stop" id="lab-stop-btn">Stop</button></div>`;
-      el("lab-stop-btn").addEventListener("click", () => socket.emit("stopSandbox"));
-    }
-    const ov = el("lab-overlay");
-    if (ov) ov.classList.toggle("hidden", st === "ready");
+    const u = escapeAttr(sandbox.url);
+    const booting = st === "booting";
+    box.innerHTML =
+      `<a class="p-opt lab-open-primary" href="${u}" target="_blank" rel="noopener">Open my Airflow ↗</a>` +
+      (booting
+        ? `<div class="lab-booting"><div class="spinner"></div><div>Booting… the first load can take ~90s. If the tab isn't up yet, wait a moment and refresh it.</div></div>`
+        : `<div class="lab-ready">Your Airflow is ready — it opens in a new tab.</div>`) +
+      `<button class="lab-stop" id="lab-stop-btn">Stop my Airflow</button>`;
+    el("lab-stop-btn").addEventListener("click", () => socket.emit("stopSandbox"));
     return;
   }
 
-  frameUrl = null;
   if (st === "queued") {
     box.innerHTML = `<div class="lab-msg">You're #${sandbox.place || "?"} in line — your Airflow starts as a slot frees up.</div>`;
     return;

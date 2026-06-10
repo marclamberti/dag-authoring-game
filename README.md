@@ -144,8 +144,9 @@ improves on them, building `dags/templates/blueprints.py`, `dags/sales.dag.yaml`
 
 Hands-on, no voting. Each participant taps **Start my Airflow** and gets a
 **dedicated Airflow 3** booted on demand in a [Modal](https://modal.com) sandbox,
-embedded right in their phone/laptop (with an "open in new tab" fallback). They
-run, for real, the patterns the room just authored:
+opened in a new tab (a cross-origin iframe can't run Airflow's UI — browsers
+block the storage it needs — so it opens as its own tab). They run, for real,
+the patterns the room just authored:
 
 1. **Your own Airflow** — boot the sandbox, log in (no password)
 2. **Run the Blueprint pipeline** — trigger `sales_pipeline` (composed from a Blueprint) and watch it go green
