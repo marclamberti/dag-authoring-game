@@ -137,7 +137,7 @@ improves on them, building `dags/templates/blueprints.py`, `dags/sales.dag.yaml`
 4. **Compose a DAG in YAML** — `sales.dag.yaml`; the ~25-line DAG becomes a few lines
 5. **Wire the steps** — `depends_on: [...]`
 6. **A second pipeline, for free** — `marketing.dag.yaml` reuses the blueprint, no Python
-7. **Load the YAML DAGs** — `dags/loader.py` calling `build_all_dags()`
+7. **Load the YAML DAGs** — `dags/loader.py` calling `build_all()`
 8. **Blueprint vs DAG Factory** — flip between `dag_factory.yaml` (verbose, raw Airflow) and `sales.dag.yaml` (Blueprint) for the same pipeline
 
 ## Level 3, Run it for real (your own Airflow)

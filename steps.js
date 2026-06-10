@@ -1274,21 +1274,21 @@ steps:
     teach: "One loader turns every YAML file into a real DAG.",
     points: [
       "Airflow normally discovers DAGs from Python files, but ours are YAML.",
-      "One small `loader.py` calls `build_all_dags()` to turn every YAML into a DAG.",
+      "One small `loader.py` calls `build_all()` to turn every YAML into a DAG.",
       "You write the loader once for the whole project.",
       "After that, a new pipeline is just a new YAML file, nothing else.",
     ],
     options: [
-      { id: "a", label: "loader.py with build_all_dags()", correct: true,
-        code: "from blueprint import build_all_dags\n\nbuild_all_dags()" },
+      { id: "a", label: "loader.py with build_all()", correct: true,
+        code: "from blueprint import build_all\n\nbuild_all()" },
       { id: "b", label: "import each DAG by hand",
         code: "from my_dags import sales" },
       { id: "c", label: "a loop that exec()s the YAML",
         code: "for f in glob(...): exec(...)" },
     ],
-    snapshot: `from blueprint import build_all_dags
+    snapshot: `from blueprint import build_all
 
-build_all_dags()
+build_all()
 `,
   },
 
