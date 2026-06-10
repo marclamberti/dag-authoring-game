@@ -229,7 +229,13 @@ function renderSandbox() {
     if (frameUrl !== sandbox.url) {
       frameUrl = sandbox.url;
       const u = escapeAttr(sandbox.url);
+      // The embedded preview works on most desktop browsers, but Safari/iOS
+      // block the cross-origin storage Airflow's UI needs, so the page can come
+      // up blank there. The "Open" button (a normal tab) always works — make it
+      // the prominent primary action.
       box.innerHTML =
+        `<a class="p-opt lab-open-primary" href="${u}" target="_blank" rel="noopener">Open my Airflow ↗</a>` +
+        `<div class="lab-frame-note">Preview below. If it's blank, your browser is blocking the embed — use the button above.</div>` +
         `<div class="lab-frame-wrap">` +
         `<div class="lab-overlay" id="lab-overlay"><div class="spinner"></div>` +
         `<div>Booting Airflow… the first load can take ~90s</div></div>` +

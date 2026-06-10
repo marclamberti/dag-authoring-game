@@ -43,8 +43,13 @@ secret = modal.Secret.from_name("dag-game-secret")
 
 # ── Seeded files (baked into the image; see NOTE above) ──────────────────────
 
-CADDYFILE = r"""# Caddy fronts Airflow on the public port (8080) and strips the frame-blocking
-# headers so the UI can be embedded in the player's iframe.
+CADDYFILE = r"""# Caddy fronts Airflow on the public port (8080) and rewrites responses so the
+# UI works inside the player's cross-origin iframe:
+#   - drop X-Frame-Options / CSP that forbid framing
+#   - rewrite Set-Cookie to SameSite=None; Secure; Partitioned, because browsers
+#     (Chrome included) block a cross-site iframe's cookies unless they're marked
+#     this way (CHIPS). Without it Airflow can't authenticate in the frame and
+#     the page renders blank.
 {
     admin off
     auto_https off
@@ -54,6 +59,8 @@ CADDYFILE = r"""# Caddy fronts Airflow on the public port (8080) and strips the 
     reverse_proxy localhost:8081 {
         header_down -X-Frame-Options
         header_down -Content-Security-Policy
+        header_down Set-Cookie "(?i); *SameSite=[^;]+" ""
+        header_down Set-Cookie "^(.+)$" "$1; SameSite=None; Secure; Partitioned"
     }
 }
 """
