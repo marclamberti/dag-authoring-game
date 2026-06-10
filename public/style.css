@@ -415,6 +415,8 @@ button { font-family: inherit; cursor: pointer; }
 .galaxy canvas { display: block; width: 100%; height: 100%; }
 
 /* ── Join hero ─────────────────────────────────────────────────────────────── */
+/* Push the join content toward the top so the title sits high on the screen. */
+#join-screen { justify-content: flex-start; padding-top: 9vh; }
 .hero { text-align: center; }
 .hero-kicker {
   display: inline-block;
@@ -430,8 +432,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .hero-title {
   margin: 0;
-  font-size: 40px;
-  line-height: 1.05;
+  font-size: clamp(40px, 12vw, 54px);
+  line-height: 1.0;
   font-weight: 700;
   letter-spacing: -0.02em;
   background: linear-gradient(180deg, #ffffff 0%, var(--purple-light) 130%);
@@ -460,14 +462,6 @@ button { font-family: inherit; cursor: pointer; }
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-}
-.player .brand {
-  text-align: center;
-  padding: var(--space-2) 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--purple);
 }
 .center { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: var(--space-3); }
 
