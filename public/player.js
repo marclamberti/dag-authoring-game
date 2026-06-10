@@ -2,6 +2,44 @@
 const socket = io();
 const el = (id) => document.getElementById(id);
 
+// ── Galaxy starfield: a calm, drifting, twinkling backdrop ───
+(function starfield() {
+  const c = document.getElementById("stars");
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  let stars = [];
+  function resize() {
+    c.width = innerWidth;
+    c.height = innerHeight;
+    const n = Math.min(180, Math.floor((c.width * c.height) / 8000));
+    stars = Array.from({ length: n }, () => ({
+      x: Math.random() * c.width,
+      y: Math.random() * c.height,
+      z: Math.random(), // depth → size, drift speed, brightness
+      tw: Math.random() * Math.PI * 2, // twinkle phase
+    }));
+  }
+  resize();
+  addEventListener("resize", resize);
+  let t = 0;
+  (function tick() {
+    t += 0.016;
+    ctx.clearRect(0, 0, c.width, c.height);
+    for (const s of stars) {
+      s.y -= (4 + s.z * 12) * 0.016; // slow upward parallax drift
+      if (s.y < -2) { s.y = c.height + 2; s.x = Math.random() * c.width; }
+      const twinkle = 0.5 + 0.5 * Math.sin(t * (0.6 + s.z) + s.tw);
+      ctx.globalAlpha = 0.2 + 0.7 * twinkle * (0.4 + s.z * 0.6);
+      ctx.fillStyle = s.z > 0.86 ? "#bf94ff" : "#ffffff"; // a few purple stars
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 0.4 + s.z * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  })();
+})();
+
 let joined = false;
 let myVote = null; // optionId I picked this step
 let myScore = 0;

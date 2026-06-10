@@ -436,6 +436,14 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Debug: jump straight to the first Level 3 (lab) step from anywhere.
+  socket.on("skipToLevel3", () => {
+    const i = steps.findIndex((s) => levelOf(s) === 3);
+    if (i < 0) return;
+    state.committed = {};
+    goToStep(i);
+  });
+
   // Explain-first: after the teaching slide, open the vote.
   socket.on("startVote", () => {
     if (state.phase !== "teaching") return;

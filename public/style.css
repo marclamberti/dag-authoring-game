@@ -355,6 +355,15 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .controls { display: flex; gap: var(--space-2); }
+/* Debug-only affordance (dashed = "not part of the real flow"). */
+.btn-debug {
+  border: 1px dashed var(--bg-input);
+  background: transparent;
+  color: var(--text-alt-2);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.lead-count { font-size: 12px; font-weight: 500; color: var(--text-alt-2); }
 
 .foot { display: flex; gap: var(--space-3); align-items: stretch; flex-wrap: wrap; }
 .join { flex: 1; min-width: 280px; display: flex; align-items: center; gap: var(--space-3); }
@@ -388,6 +397,69 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   flex-direction: column;
   padding: var(--space-3);
+  position: relative; /* sit above the galaxy backdrop */
+  z-index: 1;
+}
+
+/* ── Galaxy backdrop (player page) ─────────────────────────────────────────── */
+.galaxy {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 28% 18%, rgba(145, 70, 255, 0.20), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 78% 82%, rgba(29, 179, 255, 0.12), transparent 55%),
+    radial-gradient(ellipse 120% 120% at 50% 50%, #0b0b14, #06060a 70%);
+}
+.galaxy canvas { display: block; width: 100%; height: 100%; }
+
+/* ── Join hero ─────────────────────────────────────────────────────────────── */
+.hero { text-align: center; }
+.hero-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--purple-light);
+  border: 1px solid rgba(145, 70, 255, 0.4);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  margin-bottom: var(--space-3);
+}
+.hero-title {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #ffffff 0%, var(--purple-light) 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 36px rgba(145, 70, 255, 0.35);
+}
+.hero-sub {
+  margin: var(--space-2) auto 0;
+  max-width: 22em;
+  color: var(--text-alt);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ── Softer join card ──────────────────────────────────────────────────────── */
+.join-card {
+  background: rgba(24, 24, 27, 0.66);
+  border: 1px solid rgba(145, 70, 255, 0.22);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
 }
 .player .brand {
   text-align: center;

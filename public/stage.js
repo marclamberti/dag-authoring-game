@@ -51,11 +51,6 @@ function playLevelTransition(level) {
   if (typeof sfx !== "undefined") sfx.levelup();
 }
 
-// ── Join URL + QR ────────────────────────────────────────────
-const joinUrl = location.origin + "/";
-el("join-url").textContent = joinUrl.replace(/^https?:\/\//, "");
-new QRCode(el("qrcode"), { text: joinUrl, width: 96, height: 96, colorDark: "#0b0d17" });
-
 // ── Editor typing animation ──────────────────────────────────
 const TICK = 14;
 const TICKS = 90; // ~1.3s regardless of snapshot size
@@ -588,3 +583,5 @@ el("btn-main").addEventListener("click", () => {
 el("btn-reset").addEventListener("click", () => {
   if (confirm("Reset the whole session (editor + scores)?")) socket.emit("reset");
 });
+// Debug: jump straight to the first Level 3 (lab) step.
+el("btn-skip-l3").addEventListener("click", () => socket.emit("skipToLevel3"));
