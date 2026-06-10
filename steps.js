@@ -1362,7 +1362,7 @@ build_all_dags()
     prompt: "Time to run it for real. Spin up your personal Airflow instance.",
     tasks: [
       "Tap Start my Airflow and give it ~90s to boot",
-      "When the UI appears, log in (no password — just continue)",
+      "When the UI appears, log in",
       "Find the DAGs list: you have a Blueprint pipeline and an AI + approval DAG",
     ],
   },
