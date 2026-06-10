@@ -41,8 +41,9 @@ const ACTIVE_SANDBOX = new Set(["starting", "booting", "ready"]);
 async function modalCall(url, body) {
   const r = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-sandbox-token": MODAL.token },
-    body: JSON.stringify(body || {}),
+    headers: { "content-type": "application/json" },
+    // The shared token travels in the body (keeps the Modal endpoints simple).
+    body: JSON.stringify({ ...(body || {}), token: MODAL.token }),
   });
   if (!r.ok) throw new Error(`modal ${r.status}`);
   return r.json();

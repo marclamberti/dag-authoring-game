@@ -27,11 +27,15 @@ dags/                seeded DAGs baked into the image
 
 ## One-time setup
 
-1. **Install + auth Modal**
+1. **Install + auth Modal** (with [uv](https://docs.astral.sh/uv/))
    ```bash
-   pip install modal
+   uv tool install modal     # puts the `modal` CLI on your PATH
    modal token new
    ```
+   `modal` is the only thing you install locally — Airflow and the providers are
+   built into the sandbox image, remotely. Prefer not to install anything? Swap
+   `modal …` for `uvx modal …` below to run it ephemerally (e.g.
+   `uvx modal deploy modal/airflow_sandbox.py`).
 
 2. **Create the shared secret.** `SANDBOX_TOKEN` is a password the Node server
    sends on every call (pick any random string). `OPENAI_API_KEY` is optional —

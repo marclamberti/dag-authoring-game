@@ -18,10 +18,7 @@ from __future__ import annotations
 
 import os
 
-import modal
-import requests
-from fastapi import HTTPException, Request
-from pydantic import BaseModel
+import modal  # the only dependency needed locally to `modal deploy` this file
 
 app = modal.App("dag-authoring-airflow")
 
@@ -76,26 +73,25 @@ airflow_image = (
 )
 
 
-class IdReq(BaseModel):
-    id: str
-
-
-def _auth(request: Request) -> None:
-    """Reject calls without the shared token (when one is configured)."""
+def _auth(item) -> None:
+    """Reject calls without the shared token (when one is configured). The token
+    travels in the JSON body so these endpoints need no FastAPI Request object."""
     token = os.environ.get("SANDBOX_TOKEN")
-    if token and request.headers.get("x-sandbox-token") != token:
+    if token and (not item or item.get("token") != token):
+        from fastapi import HTTPException  # available in the endpoint image
+
         raise HTTPException(status_code=401, detail="bad sandbox token")
 
 
-def _url_for(sb: modal.Sandbox) -> str:
+def _url_for(sb):
     return sb.tunnels()[8080].url
 
 
 @app.function(image=endpoint_image, secrets=[secret])
 @modal.fastapi_endpoint(method="POST")
-def start(request: Request):
+def start(item: dict = None):
     """Spin up one Airflow sandbox; return its id + public URL immediately."""
-    _auth(request)
+    _auth(item)
     sb = modal.Sandbox.create(
         "bash",
         "/root/start_airflow.sh",
@@ -112,11 +108,11 @@ def start(request: Request):
 
 @app.function(image=endpoint_image, secrets=[secret])
 @modal.fastapi_endpoint(method="POST")
-def stop(item: IdReq, request: Request):
+def stop(item: dict):
     """Terminate a sandbox by id (idempotent)."""
-    _auth(request)
+    _auth(item)
     try:
-        modal.Sandbox.from_id(item.id).terminate()
+        modal.Sandbox.from_id(item["id"]).terminate()
     except Exception as e:  # already gone / unknown id
         return {"ok": False, "error": str(e)}
     return {"ok": True}
@@ -124,11 +120,13 @@ def stop(item: IdReq, request: Request):
 
 @app.function(image=endpoint_image, secrets=[secret])
 @modal.fastapi_endpoint(method="POST")
-def health(item: IdReq, request: Request):
+def health(item: dict):
     """Report whether a sandbox is still booting, ready, or gone."""
-    _auth(request)
+    import requests  # available in the endpoint image
+
+    _auth(item)
     try:
-        sb = modal.Sandbox.from_id(item.id)
+        sb = modal.Sandbox.from_id(item["id"])
     except Exception:
         return {"status": "gone"}
     if sb.poll() is not None:  # process exited
