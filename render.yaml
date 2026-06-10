@@ -16,3 +16,16 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      # Level 3 (optional): per-participant Airflow sandboxes via Modal. Leave
+      # unset to disable Level 3 cleanly. Deploy modal/airflow_sandbox.py, then
+      # fill these in the Render dashboard (Environment tab). See modal/README.md.
+      - key: MODAL_SANDBOX_START_URL
+        sync: false
+      - key: MODAL_SANDBOX_STOP_URL
+        sync: false
+      - key: MODAL_SANDBOX_HEALTH_URL
+        sync: false
+      - key: MODAL_SANDBOX_TOKEN
+        sync: false
+      - key: MAX_SANDBOXES
+        value: "60"

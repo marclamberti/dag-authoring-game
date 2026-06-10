@@ -105,9 +105,38 @@ function assert(cond, msg) {
   let preloadedBefore = false;
   let explainFirstTaught = false;
   let maxMult = 0;
+  let labSeen = false;
+  let sandboxTested = false;
+  let lastL2State = null; // L3 clears the editor, so snapshot L2 before then
   alice.on("result", (r) => { if (r.multiplier > maxMult) maxMult = r.multiplier; });
   while (true) {
     const idx = s.step.index;
+    // Level 3 "lab" steps are hands-on: no vote, just advance with Next.
+    if (STEPS[idx].kind === "lab") {
+      labSeen = true;
+      assert(s.phase === "lab", `step ${idx + 1} is a hands-on lab (no vote)`);
+      assert(Array.isArray(s.step.tasks) && s.step.tasks.length > 0,
+        `lab step ${idx + 1} exposes a task checklist`);
+      if (!sandboxTested) {
+        sandboxTested = true;
+        assert(s.sandboxEnabled === false, "sandboxes report disabled without Modal env");
+        const sbEvent = new Promise((r) => alice.once("sandbox", r));
+        alice.emit("startSandbox");
+        const sb = await Promise.race([sbEvent, wait(400).then(() => null)]);
+        assert(sb && sb.status === "unavailable",
+          "startSandbox reports 'unavailable' when Modal isn't configured");
+      }
+      if (idx + 1 >= STEPS.length) {
+        const fin = next(stage, "state");
+        stage.emit("next");
+        s = await fin;
+        break;
+      }
+      const nx = next(stage, "state");
+      stage.emit("next");
+      s = await nx;
+      continue;
+    }
     // Explain-first steps open on the teaching slide; open the vote first.
     if (STEPS[idx].explainFirst) {
       assert(s.phase === "teaching", `step ${idx + 1} opens in teaching (explain-first)`);
@@ -128,6 +157,7 @@ function assert(cond, msg) {
     if (STEPS[idx].snapshot !== undefined && s.files[f] !== STEPS[idx].snapshot) {
       assert(false, `step ${idx + 1} committed into ${f}`);
     }
+    if (lvl(idx) === 2) lastL2State = s; // remember the last Level 2 state
     if (STEPS[idx].id === "event_driven" && s.files["dags/sales_report.py"]) seededReport = true;
     if (STEPS[idx].file === "dags/sales_report.py" && s.activeFile === "dags/sales_report.py")
       builtReport = true;
@@ -154,16 +184,18 @@ function assert(cond, msg) {
   assert(preloadedBefore, "Level 2 preloads the 'before' DAGs (customers.py + orders.py)");
   assert(explainFirstTaught, "Level 2 build steps open on the teaching slide before the vote");
   assert(maxMult >= 2, "streak multiplier ramps above 1x on consecutive correct answers");
+  assert(labSeen, "Level 3 includes hands-on lab steps");
   assert(s.phase === "finished", "session finishes after the last step");
   assert(
-    s.files["dags/templates/blueprints.py"] &&
-      s.files["dags/sales.dag.yaml"] &&
-      s.files["dags/marketing.dag.yaml"] &&
-      s.files["dags/loader.py"],
+    lastL2State &&
+      lastL2State.files["dags/templates/blueprints.py"] &&
+      lastL2State.files["dags/sales.dag.yaml"] &&
+      lastL2State.files["dags/marketing.dag.yaml"] &&
+      lastL2State.files["dags/loader.py"],
     "Level 2 builds the Blueprint, sales.dag.yaml, marketing.dag.yaml, and loader.py"
   );
   assert(
-    s.files["dags/customers.py"] && s.files["dags/orders.py"],
+    lastL2State.files["dags/customers.py"] && lastL2State.files["dags/orders.py"],
     "the 'before' DAGs persist as reference tabs through Level 2"
   );
 

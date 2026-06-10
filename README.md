@@ -140,6 +140,34 @@ improves on them, building `dags/templates/blueprints.py`, `dags/sales.dag.yaml`
 7. **Load the YAML DAGs** — `dags/loader.py` calling `build_all_dags()`
 8. **Blueprint vs DAG Factory** — flip between `dag_factory.yaml` (verbose, raw Airflow) and `sales.dag.yaml` (Blueprint) for the same pipeline
 
+## Level 3, Run it for real (your own Airflow)
+
+Hands-on, no voting. Each participant taps **Start my Airflow** and gets a
+**dedicated Airflow 3** booted on demand in a [Modal](https://modal.com) sandbox,
+embedded right in their phone/laptop (with an "open in new tab" fallback). They
+run, for real, the patterns the room just authored:
+
+1. **Your own Airflow** — boot the sandbox, log in (no password)
+2. **Run the Blueprint pipeline** — trigger `sales_pipeline` (composed from a Blueprint) and watch it go green
+3. **AI draft, you approve** — trigger `ai_release_notes`: the **Common AI provider** (`@task.llm`) drafts a note, then a **Human-in-the-Loop** `ApprovalOperator` waits for the participant to approve before it publishes
+
+This needs the Modal side deployed and a few env vars set (below). **Without
+them the first two levels are unaffected** — the Level 3 "Start my Airflow"
+button simply reports that sandboxes aren't enabled. Full setup, cost notes, and
+the seeded DAGs live in **[`modal/README.md`](./modal/README.md)**.
+
+```
+MODAL_SANDBOX_START_URL=…    # printed by `modal deploy modal/airflow_sandbox.py`
+MODAL_SANDBOX_STOP_URL=…
+MODAL_SANDBOX_HEALTH_URL=…
+MODAL_SANDBOX_TOKEN=…        # shared secret with the Modal app
+MAX_SANDBOXES=60             # concurrency cap; the server queues beyond it
+```
+
+The server brokers `start`/`stop`/`health` to Modal, caps concurrency (queuing
+extra participants), and **auto-stops a participant's box** when they disconnect
+or you Reset — so you don't pay for idle Airflows.
+
 ### Editing a round
 
 Each step is one object in `steps.js`:
@@ -169,6 +197,10 @@ Each step is one object in `steps.js`:
 The option flagged `correct: true` is what scores points and what `snapshot`
 reflects.
 
+A `kind: "lab"` step (Level 3) is hands-on instead of a vote — it carries a
+`tasks: ["…", "…"]` checklist the participant follows in their own Airflow
+sandbox, and the presenter just clicks **Next** to move between lab steps.
+
 ## Tech
 
 Node + Express + Socket.IO + a vanilla HTML/CSS/JS front-end, no build step,
@@ -178,10 +210,16 @@ live voters. (Easy to wrap in Next.js later if you want richer visuals.)
 ## Project layout
 
 ```
-server.js          realtime server + session state machine
-steps.js           the build-script (all voting rounds)
+server.js          realtime server + session state machine + sandbox brokering
+steps.js           the build-script (all voting rounds + Level 3 labs)
 public/
   stage.html/.js   presenter screen (editor + live tally + leaderboard + QR)
-  player.html/.js  audience screen (join + vote)
+  player.html/.js  audience screen (join + vote + Level 3 Airflow iframe)
   style.css        shared styling
+modal/             Level 3: Modal app that boots per-participant Airflow sandboxes
+  airflow_sandbox.py   image + start/stop/health endpoints
+  start_airflow.sh     sandbox entrypoint (Airflow standalone + Caddy proxy)
+  Caddyfile            strips frame headers so the UI can be iframed
+  dags/                seeded DAGs (Blueprint pipeline + Common AI/HITL)
+  README.md            deploy + cost guide
 ```

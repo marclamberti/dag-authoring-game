@@ -157,7 +157,7 @@ function confLoop() {
 }
 
 function show(screen) {
-  for (const id of ["join-screen", "wait-screen", "vote-screen"]) {
+  for (const id of ["join-screen", "wait-screen", "vote-screen", "lab-screen"]) {
     el(id).classList.toggle("hidden", id !== screen);
   }
 }
@@ -184,10 +184,93 @@ function render() {
     el("wait-title").textContent = "Watch the screen";
     el("wait-sub").textContent = "Learn this, then the question is coming up…";
     setWaitScore();
+  } else if (phase === "lab") {
+    show("lab-screen");
+    renderLab();
   } else {
     show("vote-screen");
     renderVote();
   }
+}
+
+// ── Level 3 lab: your own Airflow ────────────────────────────
+let sandbox = { status: "idle" }; // updated by the per-socket "sandbox" event
+let frameUrl = null; // url currently shown in the iframe (avoid reloads)
+socket.on("sandbox", (sb) => {
+  sandbox = sb || { status: "idle" };
+  if (cur && cur.phase === "lab") renderSandbox();
+});
+
+function renderLab() {
+  if (!cur || !cur.step) return;
+  el("lab-title").textContent = cur.step.title;
+  el("lab-prompt").textContent = cur.step.prompt;
+  el("lab-tasks").innerHTML = (cur.step.tasks || [])
+    .map((t) => `<li>${escapeHtml(t)}</li>`)
+    .join("");
+  el("lab-score").textContent = myScore > 0 ? `Score: ${myScore}` : "";
+  renderSandbox();
+}
+
+function renderSandbox() {
+  const box = el("lab-sandbox");
+  const st = sandbox.status;
+
+  if (!cur.sandboxEnabled || st === "unavailable") {
+    frameUrl = null;
+    box.innerHTML =
+      '<div class="lab-msg">Live sandboxes aren\'t enabled for this session — just follow along on the big screen.</div>';
+    return;
+  }
+
+  // Frame states: build the iframe once per URL, then only toggle the booting
+  // overlay so flipping booting -> ready never reloads Airflow.
+  if ((st === "booting" || st === "ready") && sandbox.url) {
+    if (frameUrl !== sandbox.url) {
+      frameUrl = sandbox.url;
+      const u = escapeAttr(sandbox.url);
+      box.innerHTML =
+        `<div class="lab-frame-wrap">` +
+        `<div class="lab-overlay" id="lab-overlay"><div class="spinner"></div>` +
+        `<div>Booting Airflow… the first load can take ~90s</div></div>` +
+        `<iframe class="lab-frame" src="${u}" title="Your Airflow"></iframe></div>` +
+        `<div class="lab-frame-actions">` +
+        `<a class="lab-open" href="${u}" target="_blank" rel="noopener">Open in a new tab ↗</a>` +
+        `<button class="lab-stop" id="lab-stop-btn">Stop</button></div>`;
+      el("lab-stop-btn").addEventListener("click", () => socket.emit("stopSandbox"));
+    }
+    const ov = el("lab-overlay");
+    if (ov) ov.classList.toggle("hidden", st === "ready");
+    return;
+  }
+
+  frameUrl = null;
+  if (st === "queued") {
+    box.innerHTML = `<div class="lab-msg">You're #${sandbox.place || "?"} in line — your Airflow starts as a slot frees up.</div>`;
+    return;
+  }
+  if (st === "starting") {
+    box.innerHTML = '<div class="lab-booting"><div class="spinner"></div><div>Requesting your sandbox…</div></div>';
+    return;
+  }
+  // idle / stopped / error -> a start button
+  const err =
+    st === "error"
+      ? `<div class="lab-msg err">Couldn't start: ${escapeHtml(sandbox.error || "")}. Try again.</div>`
+      : st === "stopped"
+      ? '<div class="lab-msg">Sandbox stopped. Start a fresh one anytime.</div>'
+      : "";
+  box.innerHTML = `${err}<button class="p-opt lab-start" id="lab-start-btn">Start my Airflow</button>`;
+  el("lab-start-btn").addEventListener("click", () => {
+    blip(660, 0.08, 0.05);
+    sandbox = { status: "starting" };
+    renderSandbox();
+    socket.emit("startSandbox");
+  });
+}
+
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, "&quot;");
 }
 
 function setWaitScore() {

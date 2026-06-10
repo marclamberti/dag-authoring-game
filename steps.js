@@ -15,6 +15,9 @@
  *                    answer. The buggy code shows in the editor.
  *   "review"      -> you're the reviewer: a `diff` is shown; players Approve /
  *                    Request changes; `verdict` ("approve"|"request") is correct.
+ *   "lab"         -> Level 3 hands-on: no vote. Each participant boots their own
+ *                    Airflow sandbox (Modal) and follows the `tasks` checklist.
+ *                    The presenter just clicks Next to move between lab steps.
  *
  * Scoring: a correct answer scores 100 x a streak multiplier (consecutive
  * correct answers ramp 1x -> 2x -> 3x; a wrong answer resets the streak).
@@ -1345,6 +1348,48 @@ build_all_dags()
         code: "# that's DAG Factory's approach, not Blueprint" },
       { id: "c", label: "It's DAG Factory with a new name",
         code: "# they take opposite approaches" },
+    ],
+  },
+
+  // ── Level 3, Run it for real (your own Airflow) ───────────────────────────
+  // Hands-on. Each participant boots a dedicated Airflow sandbox (Modal) right
+  // in their browser and runs the patterns the room just authored. No voting.
+  {
+    id: "lab_boot",
+    kind: "lab",
+    level: 3,
+    title: "Level 3: Your own Airflow",
+    prompt: "Time to run it for real. Spin up your personal Airflow instance.",
+    tasks: [
+      "Tap Start my Airflow and give it ~90s to boot",
+      "When the UI appears, log in (no password — just continue)",
+      "Find the DAGs list: you have a Blueprint pipeline and an AI + approval DAG",
+    ],
+  },
+  {
+    id: "lab_blueprint",
+    kind: "lab",
+    level: 3,
+    title: "Level 3: Run the Blueprint pipeline",
+    prompt: "Run the DAG composed from a Blueprint — the Level 2 idea, for real.",
+    tasks: [
+      "Open the sales_pipeline DAG (it was built from sales.dag.yaml)",
+      "Unpause it, then press the play button to trigger a run",
+      "Watch extract -> load go green across the task groups",
+      "Open a task's Rendered Template to see the resolved Blueprint config",
+    ],
+  },
+  {
+    id: "lab_ai_hitl",
+    kind: "lab",
+    level: 3,
+    title: "Level 3: AI draft, you approve",
+    prompt: "Run the Common AI + Human-in-the-Loop DAG and approve the result.",
+    tasks: [
+      "Trigger the ai_release_notes DAG",
+      "It drafts a release note with @task.llm (Common AI provider)",
+      "The human_approval task pauses for YOU — open it and Approve",
+      "Watch publish run only after your approval",
     ],
   },
 ];

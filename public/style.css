@@ -656,3 +656,142 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 6px;
 }
 .p-timer.urgent { color: var(--live); animation: pulse 1s ease-in-out infinite; }
+
+/* ── Level 3: hands-on lab (player + stage) ────────────────────────────────── */
+
+/* Player: sandbox area + task checklist */
+.lab-sandbox { width: 100%; margin: 4px 0 10px; }
+.lab-start {
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  background: var(--purple);
+  color: #fff;
+  border: none;
+}
+.lab-start:active { background: var(--purple-active); }
+.lab-msg {
+  text-align: center;
+  color: var(--text-alt);
+  font-size: 14px;
+  padding: 12px;
+  background: var(--bg-alt);
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+}
+.lab-msg.err { color: var(--live); border-color: var(--live); }
+.lab-booting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 12px;
+  color: var(--text-alt);
+  font-size: 14px;
+}
+.lab-frame-wrap {
+  position: relative;
+  width: 100%;
+  height: 62vh;
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-alt);
+}
+.lab-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.lab-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(14, 14, 16, 0.92);
+  color: var(--text-base);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+.lab-overlay.hidden { display: none; }
+.lab-frame-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.lab-open { color: var(--info); font-size: 14px; text-decoration: none; }
+.lab-open:active { opacity: 0.7; }
+.lab-stop {
+  background: transparent;
+  color: var(--text-alt-2);
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+.lab-tasks {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+}
+.lab-tasks li {
+  position: relative;
+  padding: 8px 8px 8px 28px;
+  color: var(--text-base);
+  font-size: 14px;
+  border-bottom: 1px solid var(--bg-alt-2);
+}
+.lab-tasks li::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 13px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--purple);
+  border-radius: 3px;
+}
+
+/* Spinner shared by booting states */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--bg-input);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Stage: lab checklist + running count */
+.lab-tasks-stage { margin: 0; padding-left: 20px; color: var(--text-base); }
+.lab-tasks-stage li { margin: 8px 0; line-height: 1.4; }
+.lab-count {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg-alt-2);
+  color: var(--success);
+  font-weight: 600;
+}
+.lab-count.warn { color: var(--warning); font-weight: 500; }
+
+/* Stage editor placeholder during the lab */
+.lab-stage { display: block; }
+.lab-stage-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 240px;
+  gap: 10px;
+  text-align: center;
+  color: var(--text-alt);
+}
+.lab-stage-title { font-size: 22px; font-weight: 600; color: var(--text-base); }
+.lab-stage-sub { font-size: 15px; color: var(--text-alt-2); }

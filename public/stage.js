@@ -32,7 +32,7 @@ const FILE_ORDER = [
   "dags/marketing.dag.yaml",
   "dags/loader.py",
 ];
-const LEVEL_NAMES = { 1: "Author DAGs in Python", 2: "Blueprint" };
+const LEVEL_NAMES = { 1: "Author DAGs in Python", 2: "Blueprint", 3: "Run it for real" };
 
 const langFor = (name) =>
   name && name.endsWith(".yaml") ? "language-yaml" : "language-python";
@@ -214,6 +214,16 @@ function renderOptions() {
   }
   const revealed = cur.phase === "revealed";
   const total = cur.totalVotes || 0;
+  // Level 3 "lab": no vote — show the task checklist + how many boxes are live.
+  if (cur.step.kind === "lab") {
+    const tasks = (cur.step.tasks || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+    const n = cur.sandboxesRunning || 0;
+    const status = cur.sandboxEnabled
+      ? `<div class="lab-count">${n} participant${n === 1 ? "" : "s"} running Airflow</div>`
+      : `<div class="lab-count warn">Sandboxes not configured — set MODAL_SANDBOX_* env to enable</div>`;
+    wrap.innerHTML = `<ul class="lab-tasks-stage">${tasks}</ul>${status}`;
+    return;
+  }
   // "bug" rounds have no options; players tap a line in the code on the left.
   if (cur.step.kind === "bug") {
     const line = revealed && cur.correctId ? cur.correctId.slice(1) : null;
@@ -290,6 +300,7 @@ function renderControls() {
   else if (phase === "revealed")
     btn.textContent = cur.step.explainFirst ? (isLast ? "Finish" : "Next step") : "Show explanation";
   else if (phase === "explaining") btn.textContent = isLast ? "Finish" : "Next step";
+  else if (phase === "lab") btn.textContent = isLast ? "Finish" : "Next step";
   else btn.textContent = "Restart";
 }
 
@@ -374,6 +385,7 @@ let runShownFor = -1;
 
 function renderStageCode() {
   const st = cur && cur.step;
+  if (st && st.kind === "lab") return renderLabStage();
   if (st && st.kind === "review") return renderDiff(st.diff);
   if (st && st.kind === "predict_run" && cur.runOutput &&
       (cur.phase === "revealed" || cur.phase === "explaining"))
@@ -396,6 +408,21 @@ function highlightBugLine(n) {
   hl.style.height = lh + "px";
   hl.classList.add("show", "bug");
   editorBody.scrollTop = Math.max(0, top - lh * 3);
+}
+
+// Level 3 lab: the editor steps aside — everyone's hands-on in their own box.
+function renderLabStage() {
+  if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  hl.classList.remove("show", "bug");
+  caretEl.style.display = "none";
+  el("tabs").innerHTML = "";
+  editorEl.className = "lab-stage";
+  editorEl.innerHTML =
+    `<div class="lab-stage-msg">` +
+    `<div class="lab-stage-title">Everyone's running their own Airflow now</div>` +
+    `<div class="lab-stage-sub">Follow the checklist on your phone — this part is hands-on.</div>` +
+    `</div>`;
 }
 
 // You're the reviewer: render the PR diff with +/- coloring.
@@ -556,6 +583,7 @@ el("btn-main").addEventListener("click", () => {
   else if (phase === "voting") socket.emit(cur.deadline ? "reveal" : "startCountdown");
   else if (phase === "revealed") socket.emit(cur.step.explainFirst ? "next" : "explain");
   else if (phase === "explaining") socket.emit("next");
+  else if (phase === "lab") socket.emit("next");
 });
 el("btn-reset").addEventListener("click", () => {
   if (confirm("Reset the whole session (editor + scores)?")) socket.emit("reset");

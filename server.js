@@ -22,6 +22,32 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+// ── Level 3 sandboxes (Modal) ───────────────────────────────────────────────
+// The game brokers per-participant Airflow sandboxes to a deployed Modal app
+// (see modal/). If these aren't configured, Level 3's "Start my Airflow" button
+// just reports the feature is unavailable — the rest of the game is unaffected.
+const MODAL = {
+  start: process.env.MODAL_SANDBOX_START_URL,
+  stop: process.env.MODAL_SANDBOX_STOP_URL,
+  health: process.env.MODAL_SANDBOX_HEALTH_URL,
+  token: process.env.MODAL_SANDBOX_TOKEN || "",
+};
+const SANDBOXES_ENABLED = !!(MODAL.start && MODAL.stop);
+const MAX_SANDBOXES = parseInt(process.env.MAX_SANDBOXES || "60", 10);
+const queue = []; // socketIds waiting for a free sandbox slot
+// Statuses that occupy a concurrency slot.
+const ACTIVE_SANDBOX = new Set(["starting", "booting", "ready"]);
+
+async function modalCall(url, body) {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-sandbox-token": MODAL.token },
+    body: JSON.stringify(body || {}),
+  });
+  if (!r.ok) throw new Error(`modal ${r.status}`);
+  return r.json();
+}
+
 app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (_req, res) =>
   res.sendFile(path.join(__dirname, "public", "player.html"))
@@ -99,7 +125,10 @@ function publicStep() {
     explainFirst: !!s.explainFirst,
     ...levelInfo(s),
   };
-  if (s.kind === "bug") {
+  if (s.kind === "lab") {
+    // Hands-on Level 3 round: a checklist to follow in your own Airflow box.
+    base.tasks = s.tasks || [];
+  } else if (s.kind === "bug") {
     // The buggy code IS the puzzle; players tap a line. bugLine ships on reveal.
     base.code = s.code;
     base.lineCount = s.code.split("\n").length;
@@ -147,6 +176,10 @@ function fullState() {
     sessionAccuracy: state.sessionVotes
       ? Math.round((state.sessionCorrect / state.sessionVotes) * 100)
       : null,
+    // Level 3: whether per-participant Airflow sandboxes are configured, and how
+    // many are currently running (shown on the Stage).
+    sandboxEnabled: SANDBOXES_ENABLED,
+    sandboxesRunning: countActiveSandboxes(),
   };
 }
 
@@ -164,8 +197,10 @@ function clearCountdown() {
 function goToStep(i) {
   const prev = state.stepIndex >= 0 ? steps[state.stepIndex] : null;
   state.stepIndex = i;
-  // Explain-first steps open on the teaching slide before the vote.
-  state.phase = steps[i].explainFirst ? "teaching" : "voting";
+  // Level 3 "lab" steps are hands-on (no vote); explain-first steps open on the
+  // teaching slide; everything else opens straight into voting.
+  state.phase =
+    steps[i].kind === "lab" ? "lab" : steps[i].explainFirst ? "teaching" : "voting";
   state.votes = {};
   state.voters = {};
   state.voteTimes = {};
@@ -255,6 +290,75 @@ function doReveal() {
   broadcast();
 }
 
+// ── Sandbox brokering ───────────────────────────────────────────────────────
+function setSandbox(socketId, sb) {
+  const p = players[socketId];
+  if (p) p.sandbox = sb;
+  io.to(socketId).emit("sandbox", sb);
+}
+function countActiveSandboxes() {
+  return Object.values(players).filter(
+    (p) => p.sandbox && ACTIVE_SANDBOX.has(p.sandbox.status)
+  ).length;
+}
+// Promote queued players whenever a slot frees up.
+function promoteQueue() {
+  while (queue.length && countActiveSandboxes() < MAX_SANDBOXES) {
+    const sid = queue.shift();
+    if (players[sid]) launchSandbox(sid); // sets status synchronously → counts immediately
+  }
+}
+// Create a sandbox for this player, then poll until Airflow is reachable.
+async function launchSandbox(socketId) {
+  if (!players[socketId]) return;
+  setSandbox(socketId, { status: "starting" }); // occupies a slot before we await
+  try {
+    const { id, url } = await modalCall(MODAL.start, {});
+    if (!players[socketId]) {
+      // They left mid-launch — don't leak the box.
+      modalCall(MODAL.stop, { id }).catch(() => {});
+      promoteQueue();
+      return;
+    }
+    setSandbox(socketId, { status: "booting", url, id });
+    pollSandbox(socketId, 0);
+  } catch (e) {
+    setSandbox(socketId, { status: "error", error: String((e && e.message) || e) });
+    promoteQueue();
+  }
+}
+// Poll the health endpoint until the box is ready (or gone). ~200s ceiling.
+function pollSandbox(socketId, attempt) {
+  if (!MODAL.health) return; // can't poll; the player just waits on the iframe
+  const p = players[socketId];
+  const sb = p && p.sandbox;
+  if (!sb || !sb.id || sb.status === "ready") return;
+  const retry = () => {
+    if (attempt < 40) setTimeout(() => pollSandbox(socketId, attempt + 1), 5000);
+  };
+  modalCall(MODAL.health, { id: sb.id })
+    .then((res) => {
+      const cur = players[socketId] && players[socketId].sandbox;
+      if (!cur || cur.id !== sb.id) return; // superseded
+      if (res.status === "ready") setSandbox(socketId, { ...cur, status: "ready" });
+      else if (res.status === "stopped" || res.status === "gone") {
+        setSandbox(socketId, { status: "stopped" });
+        promoteQueue();
+      } else retry();
+    })
+    .catch(retry);
+}
+// Stop a player's box (if any), drop them from the queue, free the slot.
+function teardownSandbox(socketId, { reset } = {}) {
+  const p = players[socketId];
+  const sb = p && p.sandbox;
+  if (sb && sb.id) modalCall(MODAL.stop, { id: sb.id }).catch(() => {});
+  const qi = queue.indexOf(socketId);
+  if (qi >= 0) queue.splice(qi, 1);
+  if (p) setSandbox(socketId, { status: reset ? "idle" : "stopped" });
+  promoteQueue();
+}
+
 // ── Sockets ────────────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   // Either surface asks for current state on load.
@@ -266,9 +370,33 @@ io.on("connection", (socket) => {
       name: String(name || "Player").trim().slice(0, 24) || "Player",
       score: 0,
       streak: 0,
+      sandbox: { status: "idle" }, // Level 3 Airflow sandbox state
     };
     socket.emit("joined", { id: socket.id, score: 0 });
     broadcast();
+  });
+
+  // ----- Level 3: per-participant Airflow sandbox -----
+  socket.on("startSandbox", () => {
+    const p = players[socket.id];
+    if (!p) return;
+    if (!SANDBOXES_ENABLED) {
+      setSandbox(socket.id, { status: "unavailable" });
+      return;
+    }
+    const status = p.sandbox && p.sandbox.status;
+    // Already in flight or up? ignore (idempotent button).
+    if (["starting", "booting", "ready", "queued", "stopping"].includes(status)) return;
+    if (countActiveSandboxes() >= MAX_SANDBOXES) {
+      if (!queue.includes(socket.id)) queue.push(socket.id);
+      setSandbox(socket.id, { status: "queued", place: queue.indexOf(socket.id) + 1 });
+      return;
+    }
+    launchSandbox(socket.id);
+  });
+
+  socket.on("stopSandbox", () => {
+    if (players[socket.id]) teardownSandbox(socket.id, { reset: true });
   });
 
   socket.on("vote", ({ optionId }) => {
@@ -336,7 +464,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("next", () => {
-    if (state.phase !== "revealed" && state.phase !== "explaining") return;
+    // Level 3 "lab" steps have no vote/reveal — Next just advances them.
+    if (!["revealed", "explaining", "lab"].includes(state.phase)) return;
     // Code was already committed at reveal; Next just advances the round.
     if (state.stepIndex + 1 < steps.length) {
       goToStep(state.stepIndex + 1);
@@ -357,14 +486,17 @@ io.on("connection", (socket) => {
     state.sessionVotes = 0;
     clearCountdown();
     state.committed = {};
+    queue.length = 0; // clear first so teardown's promoteQueue can't relaunch
     for (const id in players) {
       players[id].score = 0;
       players[id].streak = 0;
+      teardownSandbox(id, { reset: true }); // stop everyone's Airflow box
     }
     broadcast();
   });
 
   socket.on("disconnect", () => {
+    teardownSandbox(socket.id); // stop their box before we forget the id
     delete players[socket.id];
     delete state.voters[socket.id];
     broadcast();
