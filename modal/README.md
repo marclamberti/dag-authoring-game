@@ -16,14 +16,17 @@ This folder is the Modal side; the game's Node server just brokers `start` /
 
 ```
 airflow_sandbox.py   Modal app: image + start/stop/health web endpoints
-start_airflow.sh     sandbox entrypoint (Airflow standalone + Caddy proxy)
-Caddyfile            strips X-Frame-Options/CSP so the UI can be iframed
-dags/                seeded DAGs baked into the image
-  templates/blueprints.py
-  sales.dag.yaml
-  loader.py
-  ai_release_notes.py
+README.md            this file
 ```
+
+Everything the sandbox needs — the entrypoint, the Caddyfile, and the seeded
+DAGs (the Blueprint pipeline + the Common AI / HITL DAG) — is **inlined as
+string constants in `airflow_sandbox.py`** and baked into the image at build.
+That's deliberate: sandboxes are created from inside a deployed function, where
+local files don't exist, so local-file image layers would fail. Edit the DAGs in
+those constants and redeploy. (The Blueprint pipeline lives in the
+`BLUEPRINTS_PY` / `SALES_YAML` / `LOADER_PY` constants; the AI + Human-in-the-Loop
+DAG is `AI_DAG_PY`.)
 
 ## One-time setup
 

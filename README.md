@@ -217,9 +217,7 @@ public/
   player.html/.js  audience screen (join + vote + Level 3 Airflow iframe)
   style.css        shared styling
 modal/             Level 3: Modal app that boots per-participant Airflow sandboxes
-  airflow_sandbox.py   image + start/stop/health endpoints
-  start_airflow.sh     sandbox entrypoint (Airflow standalone + Caddy proxy)
-  Caddyfile            strips frame headers so the UI can be iframed
-  dags/                seeded DAGs (Blueprint pipeline + Common AI/HITL)
+  airflow_sandbox.py   image + start/stop/health endpoints; the entrypoint,
+                       Caddyfile, and seeded DAGs are inlined + baked into the image
   README.md            deploy + cost guide
 ```
