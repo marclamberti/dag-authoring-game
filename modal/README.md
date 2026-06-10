@@ -76,7 +76,7 @@ button just reports that sandboxes aren't configured.
 ## Cost & scale
 
 Each sandbox is a real container (default 2 CPU / 4 GB) running until it's
-stopped or hits `SANDBOX_TIMEOUT` (45 min). For a 100-person webinar that's up
+stopped or hits `SANDBOX_TIMEOUT` (15 min). For a 100-person webinar that's up
 to 100 concurrent boxes — set `MAX_SANDBOXES` to a number you're comfortable
 paying for; the Node server queues participants beyond it and auto-stops a box
 when its owner disconnects or you Reset the session. First boot takes ~60–120s

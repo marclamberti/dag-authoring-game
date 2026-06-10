@@ -30,7 +30,7 @@ import modal  # the only dependency needed locally to `modal deploy` this file
 app = modal.App("dag-authoring-airflow")
 
 # Tunables (override with env at deploy time if you like).
-SANDBOX_TIMEOUT = int(os.environ.get("SANDBOX_TIMEOUT", 45 * 60))  # hard max lifetime
+SANDBOX_TIMEOUT = int(os.environ.get("SANDBOX_TIMEOUT", 15 * 60))  # hard max lifetime
 SANDBOX_CPU = float(os.environ.get("SANDBOX_CPU", 2.0))
 SANDBOX_MEMORY = int(os.environ.get("SANDBOX_MEMORY", 4096))  # MB
 AIRFLOW_VERSION = os.environ.get("AIRFLOW_VERSION", "3.1.0")
