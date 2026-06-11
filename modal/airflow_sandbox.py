@@ -36,8 +36,10 @@ SANDBOX_MEMORY = int(os.environ.get("SANDBOX_MEMORY", 4096))  # MB
 AIRFLOW_VERSION = os.environ.get("AIRFLOW_VERSION", "3.1.0")
 PY = "3.11"
 
-# Secret holds SANDBOX_TOKEN (shared with the Node server) and, optionally,
-# OPENAI_API_KEY (to make the Common AI DAG runnable). Create it with:
+# Secret holds SANDBOX_TOKEN (shared with the Node server) and, optionally, the
+# LLM key for the Common AI DAG: either OPENAI_API_KEY (we build the connection)
+# or the full AIRFLOW_CONN_OPENAI_DEFAULT (Airflow reads it as the connection
+# directly). Both flow into the sandbox via this secret. Create it with:
 #   modal secret create dag-game-secret SANDBOX_TOKEN=... OPENAI_API_KEY=...
 secret = modal.Secret.from_name("dag-game-secret")
 
@@ -84,13 +86,14 @@ export AIRFLOW__API__PORT=8081
 mkdir -p "$AIRFLOW_HOME/dags"
 cp -r /opt/seed_dags/. "$AIRFLOW_HOME/dags/" 2>/dev/null || true
 
-# Optional: wire an LLM connection so the Common AI DAG can actually run.
-# Provide OPENAI_API_KEY via the Modal secret to enable it. The exact conn type
-# may need tweaking for your common-ai provider version — the HITL approval step
-# works regardless. Best-effort, never fail boot over it.
-if [ -n "${OPENAI_API_KEY:-}" ]; then
-    airflow connections add openai_default \
-        --conn-type openai --conn-password "$OPENAI_API_KEY" >/dev/null 2>&1 || true
+# Wire the LLM connection for the Common AI DAG as an env-var connection: Airflow
+# reads AIRFLOW_CONN_<CONN_ID> straight from the environment, no DB write needed.
+# Provide AIRFLOW_CONN_OPENAI_DEFAULT directly via the Modal secret, or just
+# OPENAI_API_KEY and we build it here. We export it so every Airflow process
+# (scheduler/triggerer/api-server) inherits it. (conn type/model may need
+# tweaking for your common-ai provider version; the HITL step works either way.)
+if [ -z "${AIRFLOW_CONN_OPENAI_DEFAULT:-}" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
+    export AIRFLOW_CONN_OPENAI_DEFAULT="{\"conn_type\": \"openai\", \"password\": \"${OPENAI_API_KEY}\"}"
 fi
 
 # Header-stripping proxy on the public port.
