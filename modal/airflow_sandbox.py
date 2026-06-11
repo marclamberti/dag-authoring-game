@@ -188,17 +188,21 @@ steps:
     rows: 5000
 """
 
-AI_DAG_PY = r'''"""AI draft + human approval (Common AI provider + Human-in-the-Loop).
+AI_DAG_PY = r'''"""Personalized release-note email — AI agent + LLM + Human-in-the-Loop.
 
-An LLM drafts a customer-facing release note from a raw changelog, a human
-reviews and approves it in the Airflow UI (the new Human-in-the-Loop operator),
-and only then does it "publish". This is the Airflow 3.1+ pattern for putting a
-person in the loop of an AI workflow.
+One coherent pipeline using the Airflow 3.1+ AI building blocks together:
 
-NOTE: the `draft_note` task uses the Common AI provider and needs an LLM
-connection named `openai_default`. The sandbox creates it automatically when an
-OPENAI_API_KEY is provided to the Modal app; without a key that one task fails,
-but the DAG still parses and the human-approval step is fully usable.
+  find_recipient  (@task.agent)      an AI agent calls the randomuser.me API
+                                     through a HookToolset over the HTTP hook to
+                                     pick a real customer to notify.
+  draft_email     (@task.llm)        drafts a release-note email personalized to
+                                     that recipient.
+  human_approval  (ApprovalOperator) a person reviews and approves the draft.
+  send_email      (@task)            "sends" it, only after approval.
+
+NOTE: the AI tasks use an LLM connection named `openai_default`. The sandbox
+builds it from OPENAI_API_KEY; without a key those tasks fail, but the DAG still
+parses and the human-approval step is fully usable.
 """
 from __future__ import annotations
 
@@ -220,50 +224,16 @@ class RandomUserHook(HttpHook):
 @dag(
     schedule=None,
     catchup=False,
-    tags=["level-3", "ai", "human-in-the-loop"],
+    tags=["level-3", "ai", "agent", "human-in-the-loop"],
     doc_md=__doc__,
 )
 def ai_release_notes():
-    # Common AI provider: a single LLM call. The model is chosen by the
-    # `openai_default` connection (e.g. openai:gpt-5).
-    @task.llm(
-        llm_conn_id="openai_default",
-        system_prompt=(
-            "You are a release-notes writer. Turn the raw changelog into a "
-            "friendly, concise customer-facing note of 3-4 sentences."
-        ),
-    )
-    def draft_note(changelog: str) -> str:
-        return changelog
-
-    draft = draft_note(
-        "- Added Level 3 hands-on Airflow sandboxes\n"
-        "- Moved the confetti to each player's phone\n"
-        "- Faster reveal animation on the Stage"
-    )
-
-    # Human-in-the-Loop: an Approve / Reject gate rendered in the Airflow UI.
-    # `body` is a template field, so passing the draft XComArg renders the AI's
-    # note for the reviewer (and wires draft_note -> human_approval). Downstream
-    # stays blocked until a person responds.
-    review = ApprovalOperator(
-        task_id="human_approval",
-        subject="Approve this AI-drafted release note before it goes out?",
-        body=draft,
-    )
-
-    @task
-    def publish(note: str):
-        print("Publishing approved release note:\n" + str(note))
-
-    # Common AI agent: multi-step reasoning that can call tools. A HookToolset
-    # exposes our HTTP hook's `fetch` method, so the agent calls the randomuser.me
-    # API and summarizes the result. Independent of the draft/approval branch.
+    # 1. Agent: pick a real customer to notify, via the HTTP tool (randomuser.me).
     @task.agent(
         llm_conn_id="openai_default",
         system_prompt=(
-            "You can call an HTTP API with the `fetch` tool. Fetch a random user, "
-            "then reply with one sentence: their full name, country, and email."
+            "Use the `fetch` tool to get a random user, then reply with exactly "
+            "one line: 'Full Name <email> (Country)'."
         ),
         toolsets=[
             HookToolset(
@@ -272,12 +242,45 @@ def ai_release_notes():
             )
         ],
     )
-    def describe_random_user(prompt: str) -> str:
+    def find_recipient(prompt: str) -> str:
         return prompt
 
-    describe_random_user("Fetch a random user and describe them.")
+    recipient = find_recipient("Find a customer to send the release note to.")
 
-    draft >> review >> publish(draft)
+    # 2. LLM: draft a release-note email personalized to that recipient.
+    @task.llm(
+        llm_conn_id="openai_default",
+        system_prompt=(
+            "You are a release-notes writer. Write a friendly, concise "
+            "release-note email of 3-4 sentences, addressed to the recipient by "
+            "name, covering the changelog."
+        ),
+    )
+    def draft_email(recipient: str) -> str:
+        return f"""Recipient: {recipient}
+
+Changelog:
+- Added Level 3 hands-on Airflow sandboxes
+- Moved the confetti to each player's phone
+- Faster reveal animation on the Stage"""
+
+    draft = draft_email(recipient)
+
+    # 3. Human-in-the-Loop: a person approves the drafted email. `body` is a
+    #    template field, so the reviewer sees the draft in the Airflow UI.
+    review = ApprovalOperator(
+        task_id="human_approval",
+        subject="Approve this AI-drafted release-note email before it's sent?",
+        body=draft,
+    )
+
+    # 4. Send it — only after approval.
+    @task
+    def send_email(email: str):
+        print("Sending approved release-note email to:")
+        print(email)
+
+    review >> send_email(draft)
 
 
 ai_release_notes()
