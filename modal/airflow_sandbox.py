@@ -98,6 +98,9 @@ if [ -z "${AIRFLOW_CONN_OPENAI_DEFAULT:-}" ] && [ -n "${OPENAI_API_KEY:-}" ]; th
     export AIRFLOW_CONN_OPENAI_DEFAULT='{"conn_type": "pydanticai", "password": "'"$OPENAI_API_KEY"'", "extra": "{\"model\": \"'"$AI_MODEL"'\"}"}'
 fi
 
+# Read-only HTTP connection the AI agent's HookToolset calls (randomuser.me).
+export AIRFLOW_CONN_RANDOMUSER_API='{"conn_type": "http", "host": "randomuser.me", "schema": "https"}'
+
 # Header-stripping proxy on the public port.
 caddy run --config /root/Caddyfile --adapter caddyfile &
 
@@ -200,7 +203,18 @@ but the DAG still parses and the human-approval step is fully usable.
 from __future__ import annotations
 
 from airflow.sdk import dag, task
+from airflow.providers.common.ai.toolsets import HookToolset
+from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.standard.operators.hitl import ApprovalOperator
+
+
+# HttpHook.run() returns a requests.Response, which doesn't serialize into
+# anything an LLM can read. Expose a thin wrapper that returns the parsed JSON,
+# and hand that one method to the agent via the HookToolset.
+class RandomUserHook(HttpHook):
+    def fetch(self, endpoint: str = "/api/") -> dict:
+        """Fetch JSON from the random user API at the given endpoint."""
+        return self.run(endpoint).json()
 
 
 @dag(
@@ -241,6 +255,27 @@ def ai_release_notes():
     @task
     def publish(note: str):
         print("Publishing approved release note:\n" + str(note))
+
+    # Common AI agent: multi-step reasoning that can call tools. A HookToolset
+    # exposes our HTTP hook's `fetch` method, so the agent calls the randomuser.me
+    # API and summarizes the result. Independent of the draft/approval branch.
+    @task.agent(
+        llm_conn_id="openai_default",
+        system_prompt=(
+            "You can call an HTTP API with the `fetch` tool. Fetch a random user, "
+            "then reply with one sentence: their full name, country, and email."
+        ),
+        toolsets=[
+            HookToolset(
+                RandomUserHook(method="GET", http_conn_id="randomuser_api"),
+                allowed_methods=["fetch"],
+            )
+        ],
+    )
+    def describe_random_user(prompt: str) -> str:
+        return prompt
+
+    describe_random_user("Fetch a random user and describe them.")
 
     draft >> review >> publish(draft)
 
@@ -300,6 +335,7 @@ airflow_image = _bake_files(
         "apache-airflow-providers-common-ai",
         "apache-airflow-providers-common-compat",
         "apache-airflow-providers-openai",
+        "apache-airflow-providers-http",
         "airflow-blueprint>=0.2.0",
     )
 )

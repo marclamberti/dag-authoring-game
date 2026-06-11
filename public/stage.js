@@ -405,19 +405,49 @@ function highlightBugLine(n) {
   editorBody.scrollTop = Math.max(0, top - lh * 3);
 }
 
-// Level 3 lab: the editor steps aside — everyone's hands-on in their own box.
+// Level 3 lab: the editor shows the DAG(s) participants are running, tabbed —
+// the same code they see on their phones, on the big screen.
+let labStageTab = 0;
+let labStageSig = null;
 function renderLabStage() {
   if (typingTimer) { clearInterval(typingTimer); typingTimer = null; }
   if (runTimer) { clearInterval(runTimer); runTimer = null; }
   hl.classList.remove("show", "bug");
   caretEl.style.display = "none";
-  el("tabs").innerHTML = "";
-  editorEl.className = "lab-stage";
-  editorEl.innerHTML =
-    `<div class="lab-stage-msg">` +
-    `<div class="lab-stage-title">Everyone's running their own Airflow now</div>` +
-    `<div class="lab-stage-sub">Follow the checklist on your phone — this part is hands-on.</div>` +
-    `</div>`;
+  const files = (cur.step && cur.step.dagFiles) || [];
+  if (!files.length) {
+    el("tabs").innerHTML = "";
+    editorEl.className = "lab-stage";
+    editorEl.innerHTML =
+      `<div class="lab-stage-msg"><div class="lab-stage-title">Everyone's running their own Airflow now</div>` +
+      `<div class="lab-stage-sub">This part is hands-on.</div></div>`;
+    labStageSig = null;
+    return;
+  }
+  const stepKey = cur.step.index + ":" + files.map((f) => f.name).join(",");
+  // New step -> reset to the first tab.
+  if (labStageSig === null || !labStageSig.startsWith(stepKey + "#")) labStageTab = 0;
+  const sig = stepKey + "#" + labStageTab;
+  if (sig === labStageSig) return; // unchanged -> don't rebuild / re-highlight
+  labStageSig = sig;
+  el("tabs").innerHTML = files
+    .map((f, i) => `<button class="tab ${i === labStageTab ? "active" : ""}" data-tab="${i}">${escapeHtml(f.name)}</button>`)
+    .join("");
+  el("tabs")
+    .querySelectorAll("button")
+    .forEach((b) =>
+      b.addEventListener("click", () => {
+        labStageTab = +b.dataset.tab;
+        renderLabStage();
+      })
+    );
+  const f = files[labStageTab] || files[0];
+  editorEl.className = f.name.endsWith(".yaml") ? "language-yaml" : "language-python";
+  editorEl.textContent = f.code || "";
+  editorEl.removeAttribute("data-highlighted");
+  delete editorEl.dataset.highlighted;
+  if (window.hljs) hljs.highlightElement(editorEl);
+  editorBody.scrollTop = 0;
 }
 
 // You're the reviewer: render the PR diff with +/- coloring.
