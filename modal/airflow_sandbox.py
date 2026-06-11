@@ -86,14 +86,16 @@ export AIRFLOW__API__PORT=8081
 mkdir -p "$AIRFLOW_HOME/dags"
 cp -r /opt/seed_dags/. "$AIRFLOW_HOME/dags/" 2>/dev/null || true
 
-# Wire the LLM connection for the Common AI DAG as an env-var connection: Airflow
-# reads AIRFLOW_CONN_<CONN_ID> straight from the environment, no DB write needed.
-# Provide AIRFLOW_CONN_OPENAI_DEFAULT directly via the Modal secret, or just
-# OPENAI_API_KEY and we build it here. We export it so every Airflow process
-# (scheduler/triggerer/api-server) inherits it. (conn type/model may need
-# tweaking for your common-ai provider version; the HITL step works either way.)
+# Wire the LLM connection for the Common AI DAG as an env-var connection (Airflow
+# reads AIRFLOW_CONN_<CONN_ID> straight from the environment, no DB write). The
+# Common AI provider expects a "pydanticai" connection: the model lives in extra
+# in provider:model form (e.g. openai:gpt-4o-mini) and the API key in password.
+# Provide AIRFLOW_CONN_OPENAI_DEFAULT directly via the secret for full control,
+# or set OPENAI_API_KEY (+ optional AI_MODEL) and we build it here. Exported so
+# every Airflow process (scheduler/triggerer/api-server) inherits it.
 if [ -z "${AIRFLOW_CONN_OPENAI_DEFAULT:-}" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
-    export AIRFLOW_CONN_OPENAI_DEFAULT="{\"conn_type\": \"openai\", \"password\": \"${OPENAI_API_KEY}\"}"
+    AI_MODEL="${AI_MODEL:-openai:gpt-4o-mini}"
+    export AIRFLOW_CONN_OPENAI_DEFAULT='{"conn_type": "pydanticai", "password": "'"$OPENAI_API_KEY"'", "extra": "{\"model\": \"'"$AI_MODEL"'\"}"}'
 fi
 
 # Header-stripping proxy on the public port.
