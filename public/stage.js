@@ -381,6 +381,7 @@ let runShownFor = -1;
 function renderStageCode() {
   const st = cur && cur.step;
   if (st && st.kind === "lab") return renderLabStage();
+  labStageSig = null; // left the lab → force a rebuild next time we enter it
   if (st && st.kind === "review") return renderDiff(st.diff);
   if (st && st.kind === "predict_run" && cur.runOutput &&
       (cur.phase === "revealed" || cur.phase === "explaining"))
