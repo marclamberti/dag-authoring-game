@@ -1365,6 +1365,13 @@ build_all()
       "When the UI appears, log in",
       "Find the DAGs list: you have a Blueprint pipeline and an AI + approval DAG",
     ],
+    // While it boots, read the code you're about to run (see modal/dags/).
+    files: [
+      "sales.dag.yaml",
+      "templates/blueprints.py",
+      "loader.py",
+      "ai_release_notes.py",
+    ],
   },
   {
     id: "lab_blueprint",
@@ -1378,6 +1385,7 @@ build_all()
       "Watch extract -> load go green across the task groups",
       "Open a task's Rendered Template to see the resolved Blueprint config",
     ],
+    files: ["sales.dag.yaml", "templates/blueprints.py", "loader.py"],
   },
   {
     id: "lab_ai_hitl",
@@ -1391,5 +1399,6 @@ build_all()
       "The human_approval task pauses for YOU — open it and Approve",
       "Watch publish run only after your approval",
     ],
+    files: ["ai_release_notes.py"],
   },
 ];

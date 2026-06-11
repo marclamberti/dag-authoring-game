@@ -849,3 +849,53 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lab-stage-title { font-size: 22px; font-weight: 600; color: var(--text-base); }
 .lab-stage-sub { font-size: 15px; color: var(--text-alt-2); }
+
+/* ── Level 3: read-only DAG code viewer (player) ───────────────────────────── */
+.lab-code { width: 100%; margin-top: 12px; }
+.lab-code-wrap {
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-alt);
+}
+.lab-code-wrap > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-alt);
+  user-select: none;
+  list-style: none;
+}
+.lab-code-wrap > summary::-webkit-details-marker { display: none; }
+.lab-code-wrap > summary::before { content: "\25B8  "; color: var(--text-alt-2); }
+.lab-code-wrap[open] > summary::before { content: "\25BE  "; }
+.lab-code-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--bg-alt-2);
+}
+.lab-code-tab {
+  background: transparent;
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-sm);
+  color: var(--text-alt-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.lab-code-tab.active {
+  color: var(--text-base);
+  border-color: var(--purple);
+  background: rgba(145, 70, 255, 0.14);
+}
+.lab-code-pre {
+  margin: 0;
+  max-height: 50vh;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.lab-code-pre code { display: block; padding: 12px; white-space: pre; }

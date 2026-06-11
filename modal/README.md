@@ -15,18 +15,34 @@ This folder is the Modal side; the game's Node server just brokers `start` /
 ## What's here
 
 ```
-airflow_sandbox.py   Modal app: image + start/stop/health web endpoints
-README.md            this file
+airflow_sandbox.py    Modal app: image + start/stop/health web endpoints
+export_seed_dags.py   regenerate dags/* from the inlined constants (+ --check)
+dags/                 the seeded DAGs as real files (generated; the game reads these)
+  templates/blueprints.py
+  sales.dag.yaml
+  loader.py
+  ai_release_notes.py
+README.md             this file
 ```
 
 Everything the sandbox needs — the entrypoint, the Caddyfile, and the seeded
-DAGs (the Blueprint pipeline + the Common AI / HITL DAG) — is **inlined as
-string constants in `airflow_sandbox.py`** and baked into the image at build.
-That's deliberate: sandboxes are created from inside a deployed function, where
-local files don't exist, so local-file image layers would fail. Edit the DAGs in
-those constants and redeploy. (The Blueprint pipeline lives in the
-`BLUEPRINTS_PY` / `SALES_YAML` / `LOADER_PY` constants; the AI + Human-in-the-Loop
-DAG is `AI_DAG_PY`.)
+DAGs — is **inlined as string constants in `airflow_sandbox.py`** and baked into
+the image at build. That's deliberate: sandboxes are created from inside a
+deployed function, where local files don't exist, so local-file image layers
+would fail. The constants are the **single source of truth** (Blueprint pipeline
+= `BLUEPRINTS_PY` / `SALES_YAML` / `LOADER_PY`; AI + HITL DAG = `AI_DAG_PY`).
+
+`dags/` mirrors those constants as real files — the **game's Level 3 screen reads
+them** to show participants the code they're running. After editing a DAG
+constant, regenerate and redeploy:
+
+```bash
+python3 modal/export_seed_dags.py     # rewrite dags/* from the constants
+modal deploy modal/airflow_sandbox.py
+```
+
+`python3 modal/export_seed_dags.py --check` exits non-zero if `dags/*` has
+drifted from the constants (the game's smoke test relies on them matching).
 
 ## One-time setup
 

@@ -247,6 +247,44 @@ function renderLab() {
     .join("");
   el("lab-score").textContent = myScore > 0 ? `Score: ${myScore}` : "";
   renderSandbox();
+  renderLabCode();
+}
+
+// Read-only, tabbed viewer for the DAG source this step runs. Rebuilt only when
+// the step (file set) changes, so re-renders don't reset the open tab/scroll.
+let labCodeKey = null;
+function renderLabCode() {
+  const wrap = el("lab-code");
+  const files = (cur.step && cur.step.dagFiles) || [];
+  if (!files.length) {
+    wrap.innerHTML = "";
+    labCodeKey = null;
+    return;
+  }
+  const key = cur.step.index + ":" + files.map((f) => f.name).join(",");
+  if (key === labCodeKey) return;
+  labCodeKey = key;
+  const tabs = files
+    .map((f, i) => `<button class="lab-code-tab${i === 0 ? " active" : ""}" data-i="${i}">${escapeHtml(f.name)}</button>`)
+    .join("");
+  wrap.innerHTML =
+    `<details class="lab-code-wrap" open><summary>View the DAG code</summary>` +
+    `<div class="lab-code-tabs">${tabs}</div>` +
+    `<pre class="lab-code-pre"><code id="lab-code-body" class="hljs"></code></pre></details>`;
+  const showFile = (i) => {
+    const f = files[i];
+    const body = el("lab-code-body");
+    body.className = f.name.endsWith(".yaml") ? "language-yaml" : "language-python";
+    body.textContent = f.code || "";
+    body.removeAttribute("data-highlighted");
+    delete body.dataset.highlighted;
+    if (window.hljs) hljs.highlightElement(body);
+    wrap.querySelectorAll(".lab-code-tab").forEach((b, bi) => b.classList.toggle("active", bi === i));
+  };
+  wrap.querySelectorAll(".lab-code-tab").forEach((b) =>
+    b.addEventListener("click", () => showFile(+b.dataset.i))
+  );
+  showFile(0);
 }
 
 function renderSandbox() {

@@ -152,6 +152,10 @@ the patterns the room just authored:
 2. **Run the Blueprint pipeline** — trigger `sales_pipeline` (composed from a Blueprint) and watch it go green
 3. **AI draft, you approve** — trigger `ai_release_notes`: the **Common AI provider** (`@task.llm`) drafts a note, then a **Human-in-the-Loop** `ApprovalOperator` waits for the participant to approve before it publishes
 
+Each lab step also shows the **source of the DAG(s) it has them run**, in a
+collapsible tabbed viewer on the player screen (read straight from `modal/dags/`),
+so participants can read the code as they run it.
+
 This needs the Modal side deployed and a few env vars set (below). **Without
 them the first two levels are unaffected** — the Level 3 "Start my Airflow"
 button simply reports that sandboxes aren't enabled. Full setup, cost notes, and
@@ -220,5 +224,7 @@ public/
 modal/             Level 3: Modal app that boots per-participant Airflow sandboxes
   airflow_sandbox.py   image + start/stop/health endpoints; the entrypoint,
                        Caddyfile, and seeded DAGs are inlined + baked into the image
+  export_seed_dags.py  regenerate dags/* from those constants (run after editing)
+  dags/                seeded DAGs as files; the Level 3 screen shows this code
   README.md            deploy + cost guide
 ```

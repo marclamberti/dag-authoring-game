@@ -11,10 +11,25 @@
  */
 
 const path = require("path");
+const fs = require("fs");
 const http = require("http");
 const express = require("express");
 const { Server } = require("socket.io");
 const steps = require("./steps");
+
+// Seeded DAG sources (single source of truth: modal/dags/, kept in sync with the
+// inlined constants by modal/export_seed_dags.py). Read once so Level 3 "lab"
+// steps can show participants the code they're running. Falls back gracefully.
+const SEED_DAG_DIR = path.join(__dirname, "modal", "dags");
+const _seedDagCache = {};
+function readSeedDag(rel) {
+  if (rel in _seedDagCache) return _seedDagCache[rel];
+  try {
+    return (_seedDagCache[rel] = fs.readFileSync(path.join(SEED_DAG_DIR, rel), "utf8"));
+  } catch {
+    return (_seedDagCache[rel] = null);
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -127,8 +142,12 @@ function publicStep() {
     ...levelInfo(s),
   };
   if (s.kind === "lab") {
-    // Hands-on Level 3 round: a checklist to follow in your own Airflow box.
+    // Hands-on Level 3 round: a checklist to follow in your own Airflow box,
+    // plus the source of the DAG(s) this step has them run (read-only viewer).
     base.tasks = s.tasks || [];
+    base.dagFiles = (s.files || [])
+      .map((rel) => ({ name: rel, code: readSeedDag(rel) }))
+      .filter((f) => f.code != null);
   } else if (s.kind === "bug") {
     // The buggy code IS the puzzle; players tap a line. bugLine ships on reveal.
     base.code = s.code;

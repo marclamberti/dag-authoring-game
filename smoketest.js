@@ -15,6 +15,15 @@ function assert(cond, msg) {
 }
 
 (async () => {
+  // The seeded DAG files the Level 3 screen shows must match the Modal constants.
+  try {
+    require("child_process").execSync("python3 modal/export_seed_dags.py --check", { stdio: "pipe" });
+    assert(true, "seeded DAG files are in sync with the Modal constants");
+  } catch (e) {
+    if (e.code === "ENOENT") console.log("  - (seed-DAG sync check skipped: python3 not found)");
+    else assert(false, "seeded DAG files in sync with Modal constants — run modal/export_seed_dags.py");
+  }
+
   await wait(400);
   const stage = io(URL);
   const alice = io(URL);
@@ -117,6 +126,11 @@ function assert(cond, msg) {
       assert(s.phase === "lab", `step ${idx + 1} is a hands-on lab (no vote)`);
       assert(Array.isArray(s.step.tasks) && s.step.tasks.length > 0,
         `lab step ${idx + 1} exposes a task checklist`);
+      assert(
+        Array.isArray(s.step.dagFiles) && s.step.dagFiles.length > 0 &&
+          s.step.dagFiles.every((f) => f.code && f.code.length > 0),
+        `lab step ${idx + 1} exposes the DAG source files`
+      );
       if (!sandboxTested) {
         sandboxTested = true;
         assert(s.sandboxEnabled === false, "sandboxes report disabled without Modal env");
