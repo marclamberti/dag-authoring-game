@@ -216,9 +216,10 @@ from airflow.providers.standard.operators.hitl import ApprovalOperator
 # anything an LLM can read. Expose a thin wrapper that returns the parsed JSON,
 # and hand that one method to the agent via the HookToolset.
 class RandomUserHook(HttpHook):
-    def fetch(self, endpoint: str = "/api/") -> dict:
-        """Fetch JSON from the random user API at the given endpoint."""
-        return self.run(endpoint).json()
+    def fetch(self) -> dict:
+        """Fetch one random user from the API as JSON. Takes no arguments so the
+        LLM can't pass a wrong endpoint — the path is fixed here."""
+        return self.run("/api/").json()
 
 
 @dag(
