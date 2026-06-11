@@ -156,9 +156,32 @@ function publicStep() {
     base.diff = s.diff; // the PR; players Approve / Request changes
     base.options = REVIEW_OPTIONS;
   } else {
-    base.options = s.options.map((o) => ({ id: o.id, label: o.label, code: o.code }));
+    // Shuffle so the correct answer isn't always first. Seeded by the step
+    // index, so the order is stable for the whole round (it won't jump around as
+    // votes stream in) but varies the correct option's position across steps.
+    base.options = shuffleSeeded(
+      s.options.map((o) => ({ id: o.id, label: o.label, code: o.code })),
+      state.stepIndex
+    );
   }
   return base;
+}
+
+// Deterministic Fisher–Yates shuffle (splitmix32 PRNG seeded by `seed`).
+function shuffleSeeded(arr, seed) {
+  let x = (seed + 1) >>> 0;
+  const rnd = () => {
+    x = (x + 0x9e3779b9) >>> 0;
+    let z = x;
+    z = Math.imul(z ^ (z >>> 16), 0x21f0aaad) >>> 0;
+    z = Math.imul(z ^ (z >>> 15), 0x735a2d97) >>> 0;
+    return ((z ^ (z >>> 15)) >>> 0) / 4294967296;
+  };
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 function fullState() {
