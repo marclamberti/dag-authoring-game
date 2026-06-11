@@ -199,7 +199,7 @@ but the DAG still parses and the human-approval step is fully usable.
 """
 from __future__ import annotations
 
-from airflow.providers.common.compat.sdk import dag, task
+from airflow.sdk import dag, task
 from airflow.providers.standard.operators.hitl import ApprovalOperator
 
 
