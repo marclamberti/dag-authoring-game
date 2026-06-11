@@ -786,31 +786,6 @@ button { font-family: inherit; cursor: pointer; }
   padding: 6px 12px;
   font-size: 13px;
 }
-.lab-tasks {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  width: 100%;
-  text-align: left;
-}
-.lab-tasks li {
-  position: relative;
-  padding: 8px 8px 8px 28px;
-  color: var(--text-base);
-  font-size: 14px;
-  border-bottom: 1px solid var(--bg-alt-2);
-}
-.lab-tasks li::before {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 13px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--purple);
-  border-radius: 3px;
-}
-
 /* Spinner shared by booting states */
 .spinner {
   width: 28px;
@@ -851,7 +826,14 @@ button { font-family: inherit; cursor: pointer; }
 .lab-stage-sub { font-size: 15px; color: var(--text-alt-2); }
 
 /* ── Level 3: read-only DAG code viewer (player) ───────────────────────────── */
-.lab-code { width: 100%; margin-top: 12px; }
+/* Break the code viewer out of the narrow player column so it's comfortably
+   wide on a laptop (and near-full-width on a phone). */
+.lab-code {
+  width: min(94vw, 1040px);
+  margin-top: 16px;
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
 .lab-code-wrap {
   border: 1px solid var(--bg-input);
   border-radius: var(--radius-md);

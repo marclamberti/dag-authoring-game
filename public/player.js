@@ -235,28 +235,30 @@ function render() {
 let sandbox = { status: "idle" }; // updated by the per-socket "sandbox" event
 socket.on("sandbox", (sb) => {
   sandbox = sb || { status: "idle" };
-  if (cur && cur.phase === "lab") renderSandbox();
+  if (cur && cur.phase === "lab") {
+    renderSandbox();
+    renderLabCode(); // code viewer appears once the sandbox is up
+  }
 });
 
 function renderLab() {
   if (!cur || !cur.step) return;
   el("lab-title").textContent = cur.step.title;
   el("lab-prompt").textContent = cur.step.prompt;
-  el("lab-tasks").innerHTML = (cur.step.tasks || [])
-    .map((t) => `<li>${escapeHtml(t)}</li>`)
-    .join("");
   el("lab-score").textContent = myScore > 0 ? `Score: ${myScore}` : "";
   renderSandbox();
   renderLabCode();
 }
 
-// Read-only, tabbed viewer for the DAG source this step runs. Rebuilt only when
-// the step (file set) changes, so re-renders don't reset the open tab/scroll.
+// Read-only, tabbed viewer for the DAG source this step runs. Shown only once the
+// participant's sandbox is up. Rebuilt only when the file set / started-state
+// changes, so re-renders don't reset the open tab/scroll.
 let labCodeKey = null;
 function renderLabCode() {
   const wrap = el("lab-code");
+  const started = sandbox.status === "booting" || sandbox.status === "ready";
   const files = (cur.step && cur.step.dagFiles) || [];
-  if (!files.length) {
+  if (!started || !files.length) {
     wrap.innerHTML = "";
     labCodeKey = null;
     return;
