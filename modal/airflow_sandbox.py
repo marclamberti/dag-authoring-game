@@ -94,7 +94,7 @@ cp -r /opt/seed_dags/. "$AIRFLOW_HOME/dags/" 2>/dev/null || true
 # or set OPENAI_API_KEY (+ optional AI_MODEL) and we build it here. Exported so
 # every Airflow process (scheduler/triggerer/api-server) inherits it.
 if [ -z "${AIRFLOW_CONN_OPENAI_DEFAULT:-}" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
-    AI_MODEL="${AI_MODEL:-openai:gpt-4o-mini}"
+    AI_MODEL="${AI_MODEL:-openai:gpt-5}"
     export AIRFLOW_CONN_OPENAI_DEFAULT='{"conn_type": "pydanticai", "password": "'"$OPENAI_API_KEY"'", "extra": "{\"model\": \"'"$AI_MODEL"'\"}"}'
 fi
 
@@ -211,7 +211,7 @@ from airflow.providers.standard.operators.hitl import ApprovalOperator
 )
 def ai_release_notes():
     # Common AI provider: a single LLM call. The model is chosen by the
-    # `openai_default` connection (e.g. openai:gpt-4o-mini).
+    # `openai_default` connection (e.g. openai:gpt-5).
     @task.llm(
         llm_conn_id="openai_default",
         system_prompt=(
@@ -229,10 +229,13 @@ def ai_release_notes():
     )
 
     # Human-in-the-Loop: an Approve / Reject gate rendered in the Airflow UI.
-    # Downstream stays blocked until a person responds.
+    # `body` is a template field, so passing the draft XComArg renders the AI's
+    # note for the reviewer (and wires draft_note -> human_approval). Downstream
+    # stays blocked until a person responds.
     review = ApprovalOperator(
         task_id="human_approval",
         subject="Approve this AI-drafted release note before it goes out?",
+        body=draft,
     )
 
     @task
